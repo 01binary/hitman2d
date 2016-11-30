@@ -1,0 +1,71 @@
+/*------------------------------------------------------------------*\
+|
+| Hitman2DError.h
+|
+|-------------------------------------------------------------------
+|
+| Content: HiTMAN: 2D error class(es)
+| Created: 06/30/2007
+|
+|-------------------------------------------------------------------
+| Copyright © Valeriy Novytskyy
+\*------------------------------------------------------------------*/
+
+#ifndef HITMAN2D_ERROR_H
+#define HITMAN2D_ERROR_H
+
+/*----------------------------------------------------------*\
+| CHitman2DErrorEngineVersion class
+\*----------------------------------------------------------*/
+
+class CHitman2DErrorEngineVersion: public CThunderError
+{
+private:
+	DWORD m_dwCurrentVersion;
+	DWORD m_dwRequiredVersion;
+
+public:
+	CHitman2DErrorEngineVersion(LPCWSTR pszFunctionName,
+								DWORD dwCurrentVersion,
+								DWORD dwRequiredVersion);
+
+public:
+	DWORD GetCurrentVersion(void) const;
+	DWORD GetRequiredVersion(void) const;
+
+public:
+	virtual CThunderError* Duplicate(void) const;
+};
+
+/*----------------------------------------------------------*\
+| CHitman2DErrorConfigureExit class
+\*----------------------------------------------------------*/
+
+class CHitman2DErrorConfigureExit: public CThunderError
+{
+public:
+	CHitman2DErrorConfigureExit(LPCWSTR pszFunctionName);
+
+public:
+	virtual CThunderError* Duplicate(void) const;
+};
+
+/*----------------------------------------------------------*\
+| CHitman2DErrorCustom class
+\*----------------------------------------------------------*/
+
+class CHitman2DErrorCustom: public CThunderError
+{
+private:
+	CThunderString m_strCustomMessage;
+
+public:
+	CHitman2DErrorCustom(LPCWSTR pszFunctionName,
+						 LPCWSTR pszCustomMessage);
+
+public:
+	const CThunderString& GetCustomMessage(void) const;
+	virtual CThunderError* Duplicate(void) const;
+};
+
+#endif // HITMAN2D_ERROR_H

@@ -1,0 +1,158 @@
+/*------------------------------------------------------------------*\
+|
+| Hitman2DDialogs.h
+|
+|-------------------------------------------------------------------
+|
+| Content: HiTMAN: 2D dialog box procedures header
+| Created: 08/03/2007
+|
+|-------------------------------------------------------------------
+| Copyright © Valeriy Novytskyy
+\*------------------------------------------------------------------*/
+
+#ifndef HITMAN2D_DIALOGS_H
+#define HITMAN2D_DIALOGS_H
+
+/*----------------------------------------------------------*\
+| Declarations
+\*----------------------------------------------------------*/
+
+class CHitman2DGame;				// referencing CHitman2DGame
+class CHitman2DDialogConfigure;		// referencing CHitman2DDialogConfigure
+
+
+/*----------------------------------------------------------*\
+| CHitman2DDialogVideo
+\*----------------------------------------------------------*/
+
+class CHitman2DDialogVideo
+{
+private:
+	LPDIRECT3D9 m_pD3D;
+
+	THU_DEVICE_TYPES m_nDevType;
+	bool m_bSWVP;
+	bool m_bPure;
+
+public:
+	CHitman2DDialogVideo(CHitman2DGame* pGame);
+	~CHitman2DDialogVideo(void);
+
+public:
+	THU_DEVICE_TYPES GetDeviceType(void) const;
+	bool GetSWVP(void) const;
+	bool GetPure(void) const;
+
+	int Show(HWND hWndParent, LPDIRECT3D9 pD3D);
+
+	static LRESULT CALLBACK DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
+};
+
+/*----------------------------------------------------------*\
+| CHitman2DDialogAudio
+\*----------------------------------------------------------*/
+
+class CHitman2DDialogAudio
+{
+private:
+	bool m_bExclusive;
+	bool m_bDisableSounds;
+	bool m_bDisableMusic;
+
+public:
+	CHitman2DDialogAudio(CHitman2DGame* pGame);
+	~CHitman2DDialogAudio(void);
+
+public:
+	bool GetExclusive(void) const;
+	bool GetDisableSound(void) const;
+	bool GetDisableMusic(void) const;
+
+	int Show(HWND hWndParent);
+
+	static LRESULT CALLBACK DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
+};
+
+/*----------------------------------------------------------*\
+| CHitman2DDialogStartup
+\*----------------------------------------------------------*/
+
+class CHitman2DDialogStartup
+{
+private:
+	CThunderString m_strLogFilePath;
+	CThunderString m_strScriptPath;
+	CThunderString m_strControlsPath;
+	THU_LOG_MODE m_nLogMode;
+
+public:
+	CHitman2DDialogStartup(CHitman2DGame* pGame);
+	~CHitman2DDialogStartup(void);
+
+public:
+	const CThunderString& GetLogFilePath(void) const;
+	const CThunderString& GetScriptPath(void) const;
+	const CThunderString& GetControlsPath(void) const;
+	THU_LOG_MODE GetLogMode(void) const;
+
+	int Show(HWND hWndParent);
+
+	static LRESULT CALLBACK DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
+};
+
+/*----------------------------------------------------------*\
+| CHitman2DDialogConfigure
+\*----------------------------------------------------------*/
+
+class CHitman2DDialogConfigure
+{
+private:
+	friend class CHitman2DDialogVideo;
+
+	CHitman2DGame* m_pGame;								// Saves game instance (engine not yet initialized)
+	LPDIRECT3D9 m_pD3D;									// Temporary D3D instance for information retrieval
+
+	THU_DEVICE_FORMATS m_nDevFormat;
+	DWORD m_dwResWidth;
+	DWORD m_dwResHeight;
+	DWORD m_dwRefresh;
+
+	CHitman2DDialogVideo m_dialogVideo;
+	CHitman2DDialogAudio m_dialogAudio;
+	CHitman2DDialogStartup m_dialogStartup;
+
+public:
+	CHitman2DDialogConfigure(CHitman2DGame* pGame);
+	~CHitman2DDialogConfigure(void);
+
+public:
+	int Show(void);
+
+	static LRESULT CALLBACK DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
+};
+
+/*----------------------------------------------------------*\
+| CHitman2DDialogError
+\*----------------------------------------------------------*/
+
+class CHitman2DDialogError
+{
+private:
+	HICON m_hErrorIcon;
+	LPCWSTR m_pszText;
+	bool m_bNotAgain;
+
+public:
+	CHitman2DDialogError(void);
+	~CHitman2DDialogError(void);
+
+public:
+	bool GetNotAgain(void) const;
+
+	int Show(HWND hWndParent, LPCWSTR pszText);
+
+	static LRESULT CALLBACK DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
+};
+
+#endif

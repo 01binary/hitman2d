@@ -1,0 +1,1415 @@
+/*------------------------------------------------------------------*\
+|
+| Hitman2DScreens.h
+|
+|-------------------------------------------------------------------
+|
+| Content: HiTMAN: 2D screen classes
+| Created: 07/19/2007
+|
+|-------------------------------------------------------------------
+| Copyright © Valeriy Novytskyy
+\*------------------------------------------------------------------*/
+
+#ifndef HITMAN2D_SCREENS_H
+#define HITMAN2D_SCREENS_H
+
+/*----------------------------------------------------------*\
+| Constants
+\*----------------------------------------------------------*/
+
+enum H2D_SCREENOVERLAPPED_FLAGS					// CHitman2DScreenOverlapped flags
+{
+	H2D_SCREENOVERLAPPED_FADEEFFECTS =				THU_SCREEN_USERFLAG << 0,	// Enable fading effects for activation, deactivation and closure
+	H2D_SCREENOVERLAPPED_DRAGGABLE =				THU_SCREEN_USERFLAG << 1,	// Enable dragging
+	H2D_SCREENOVERLAPPED_NOFOCUSCHILDREN =			THU_SCREEN_USERFLAG << 2,	// Don't focus children on activate
+	H2D_SCREENOVERLAPPED_NOFOREGROUND =				THU_SCREEN_USERFLAG << 3,	// Don't set as foreground on activate
+	H2D_SCREENOVERLAPPED_USERFLAG =					THU_SCREEN_USERFLAG << 4	// Next flag to use
+};
+
+enum H2D_SCREENFRAME_FLAGS						// CHitman2DScreenFrame flags
+{
+	H2D_SCREENFRAME_AUTOSIZE =						THU_SCREEN_USERFLAG << 0,	// Enable automatic sizing to fill container
+	H2D_SCREENFRAME_RECTANGLE =						THU_SCREEN_USERFLAG << 1,	// Render as rectangle (4 corners + 4 edges + center)
+	H2D_SCREENFRAME_HORIZONTAL =					THU_SCREEN_USERFLAG << 2,	// Render as horizontal line (2 corners + top edge)
+	H2D_SCREENFRAME_VERTICAL =						THU_SCREEN_USERFLAG << 3,	// Render as vertical line (2 corners + left edge)
+};
+
+enum H2D_SCREENLABEL_FLAGS						// CHitman2DScreenLabel flags
+{
+	H2D_SCREENLABEL_TEXT_BOTTOM =					THU_SCREEN_USERFLAG << 0,	// Align text bottom
+	H2D_SCREENLABEL_TEXT_CENTER =					THU_SCREEN_USERFLAG << 1,	// Align text horizontal center
+	H2D_SCREENLABEL_TEXT_LEFT =						THU_SCREEN_USERFLAG << 2,	// Align text left
+	H2D_SCREENLABEL_TEXT_RIGHT =					THU_SCREEN_USERFLAG << 3,	// Align text right
+	H2D_SCREENLABEL_TEXT_SINGLELINE =				THU_SCREEN_USERFLAG << 4,	// No wrapping or multiple lines
+	H2D_SCREENLABEL_TEXT_TOP =						THU_SCREEN_USERFLAG << 5,	// Align text top
+	H2D_SCREENLABEL_TEXT_VCENTER =					THU_SCREEN_USERFLAG << 6,	// Align text vertical center
+	H2D_SCREENLABEL_TEXT_WORDBREAK =				THU_SCREEN_USERFLAG << 7	// Enable work break
+};
+
+enum H2D_SCREENBUTTON_FLAGS						// CHitman2DScreenButton flags
+{
+	H2D_SCREENBUTTON_NOTIFYSTATE =					THU_SCREEN_USERFLAG << 0,	// Notify on mouse activation
+	H2D_SCREENBUTTON_TOGGLE =						THU_SCREEN_USERFLAG << 1,	// Is a toggle button
+	H2D_SCREENBUTTON_RADIO =						THU_SCREEN_USERFLAG << 2	// Is a radio button (ID defines radio group)
+};
+
+enum H2D_SCREENBUTTON_NOTIFY					// CHitman2DScreenButton notifications
+{
+	H2D_SCREENBUTTON_NOTIFY_SELECT,					// Selection state changed (see H2D_SCREENBUTTON_NOTIFY_SELECT_TYPES)
+	H2D_SCREENBUTTON_NOTIFY_ACTION,					// Going to execute action
+	H2D_SCREENBUTTON_NOTIFY_COUNT					// Number of state notifications defined
+};
+
+enum H2D_SCREENBUTTON_NOTIFY_SELECT_TYPES		//  CHitman2DScreenButton select notify types
+{
+	H2D_SCREENBUTTON_NOTIFY_SELECT_NONE,			// Deselected (with mouse or by focus)
+	H2D_SCREENBUTTON_NOTIFY_SELECT_HOVER,			// Selected (with mouse or by focus)
+	H2D_SCREENBUTTON_NOTIFY_SELECT_PUSHED			// Pushed (with mouse or keyboard)
+};
+
+enum H2D_SCREENBUTTON_STATES					// CHitman2DScreenButton states
+{
+	H2D_SCREENBUTTON_STATE_NORMAL,					// Normal
+	H2D_SCREENBUTTON_STATE_HOVER,					// Hover (when focused or when mouse is over)
+	H2D_SCREENBUTTON_STATE_PUSHED,					// Pushed (by mouse or by keyboard)
+	H2D_SCREENBUTTON_STATE_DISABLED,				// Does not accept intput
+	H2D_SCREENBUTTON_STATE_NORMALTOGGLED,			// Normal, while toggled (on)
+	H2D_SCREENBUTTON_STATE_HOVERTOGGLED,			// Hover, while toggled (on)
+	H2D_SCREENBUTTON_STATE_PUSHEDTOGGLED,			// Pushed, while toggled (on)
+	H2D_SCREENBUTTON_STATE_DISABLEDTOGGLED,			// Disabled, while toggled (on)
+	H2D_SCREENBUTTON_STATE_COUNT					// Number of states defined
+};
+
+enum H2D_SCREENFRAME_ELEMENTS
+{
+	H2D_SCREENFRAME_ELEMENT_TOPLEFT,				// Top Left corner texture
+	H2D_SCREENFRAME_ELEMENT_TOPRIGHT,				// Top Right corner texture
+	H2D_SCREENFRAME_ELEMENT_BOTTOMLEFT,				// Bottom left corner texture
+	H2D_SCREENFRAME_ELEMENT_BOTTOMRIGHT,			// Bottom right corner texture
+	H2D_SCREENFRAME_ELEMENT_TOP,					// Top edge repeated texture
+	H2D_SCREENFRAME_ELEMENT_BOTTOM,					// Bottom edge repeated texture
+	H2D_SCREENFRAME_ELEMENT_LEFT,					// Left edge repeated texture
+	H2D_SCREENFRAME_ELEMENT_RIGHT,					// Right edge repeated texture
+	H2D_SCREENFRAME_ELEMENT_CENTER,					// Center repeated texture
+	H2D_SCREENFRAME_ELEMENT_COUNT
+};
+
+enum H2D_SCREENSCROLLBAR_FLAGS					// CHitman2DScreenScrollbar flags
+{
+	H2D_SCREENSCROLLBAR_HORIZONTAL =				THU_SCREEN_USERFLAG << 0,	// Horizontal scrollbar
+	H2D_SCREENSCROLLBAR_VERTICAL =					THU_SCREEN_USERFLAG << 1	// Vertical scrollbar
+};
+
+enum H2D_SCREENSCROLLBAR_NOTIFY					// CHitman2DScreenScrollbar notifications
+{
+	H2D_SCREENSCROLLBAR_NOTIFY_SCROLL = 3			// Scrolled (see H2D_SCREENSCROLLBAR_NOTIFY_SCROLL_TYPES)
+};
+
+enum H2D_SCREENSCROLLBAR_NOTIFY_SCROLL_TYPES	// Types of Scroll notification
+{
+	H2D_SCREENSCROLLBAR_SCROLL_ARROW,				// Scrolled by clicking arrow
+	H2D_SCREENSCROLLBAR_SCROLL_THUMB,				// Scrolled by dragging thumb
+	H2D_SCREENSCROLLBAR_SCROLL_SHAFT,				// Scrolled by dragging on shaft
+	H2D_SCREENSCROLLBAR_SCROLL_USER					// Scrolled by using SetValue()
+};
+
+enum H2D_SCREENSCROLLBAR_ELEMS					// CHitman2DScreenScrollbar element types
+{
+	H2D_SCREENSCROLLBAR_ELEM_LEFTARROW = 0,			// Left arrow (if horizontal)
+	H2D_SCREENSCROLLBAR_ELEM_UPARROW = 0,			// Up arrow	(if vertical)
+	H2D_SCREENSCROLLBAR_ELEM_RIGHTARROW = 1,		// Right arrow (if horizontal)
+	H2D_SCREENSCROLLBAR_ELEM_DOWNARROW = 1,			// Down arrow (if vertical)
+	H2D_SCREENSCROLLBAR_ELEM_SHAFTLEFT = 2,			// Shaft left edge (if horizontal)
+	H2D_SCREENSCROLLBAR_ELEM_SHAFTTOP = 2,			// Shaft top edge (if vertical)
+	H2D_SCREENSCROLLBAR_ELEM_SHAFTCENTER = 3,		// Shaft center repeat
+	H2D_SCREENSCROLLBAR_ELEM_SHAFTRIGHT = 4,		// Shaft right edge (if horizontal)
+	H2D_SCREENSCROLLBAR_ELEM_SHAFTBOTTOM = 4,		// Shaft bottom edge (if vertical)
+	H2D_SCREENSCROLLBAR_ELEM_THUMBLEFT = 5,			// Thumb left edge (if horizontal)
+	H2D_SCREENSCROLLBAR_ELEM_THUMBTOP = 5,			// Thumb top edge (if vertical)
+	H2D_SCREENSCROLLBAR_ELEM_THUMBCENTER = 6,		// Thumb center repeat
+	H2D_SCREENSCROLLBAR_ELEM_THUMBRIGHT = 7,		// Thumb right edge (if horizontal)
+	H2D_SCREENSCROLLBAR_ELEM_THUMBBOTTOM = 7,		// thumb bottom edge (if vertical)
+	H2D_SCREENSCROLLBAR_ELEM_COUNT
+};
+
+enum H2D_SCREENSCROLLBAR_HITTEST				// CHitman2DScreenScrollbar hit test results
+{
+	H2D_SCREENSCROLLBAR_HIT_LEFTARROW = 0,			// Hit left arrow (if horizontal)
+	H2D_SCREENSCROLLBAR_HIT_UPARROW = 0,			// Hit up arrow (if vertical)
+	H2D_SCREENSCROLLBAR_HIT_RIGHTARROW = 1,			// Hit right arrow (if horizontal)
+	H2D_SCREENSCROLLBAR_HIT_DOWNARROW = 1,			// Hit down arrow (if vertical)
+	H2D_SCREENSCROLLBAR_HIT_THUMB = 2,				// Hit thumb
+	H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT = 3,			// Hit shaft left (if horizontal)
+	H2D_SCREENSCROLLBAR_HIT_SHAFTTOP = 3,			// Hit shaft top part (if horizontal)
+	H2D_SCREENSCROLLBAR_HIT_SHAFTRIGHT = 4,			// Hit shaft right part (if horizontal)
+	H2D_SCREENSCROLLBAR_HIT_SHAFTBOTTOM = 4,		// Hit shaft bottom part (if vertical)
+	H2D_SCREENSCROLLBAR_HIT_COUNT
+};
+
+enum H2D_SCREENSCROLLBAR_ELEM_STATES			// CHitman2DScreenScrollbar element states
+{
+	H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL,			// Normal
+	H2D_SCREENSCROLLBAR_ELEM_STATE_HOVER,			// Hover (mouse over)
+	H2D_SCREENSCROLLBAR_ELEM_STATE_PUSHED,			// Pushed (mouse button)
+	H2D_SCREENSCROLLBAR_ELEM_STATE_DISABLED,		// Disabled (can't be used)
+	H2D_SCREENSCROLLBAR_ELEM_STATE_COUNT			// Number of element states defined
+};
+
+/*----------------------------------------------------------*\
+| Declarations
+\*----------------------------------------------------------*/
+
+class CHitman2DScreenListBox;		// referencing CHitman2DScreenListBox (declared below)
+
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenOverlapped class - top-level screen
+\*----------------------------------------------------------*/
+
+class CHitman2DScreenOverlapped: public CThunderScreen
+{
+protected:
+	enum TIMERS
+	{
+		TIMER_FADE
+	};
+
+	// Fading
+
+	CThunderTimer* m_pFadeTimer;
+
+	int m_nScreenFadeInactive;					// Inactive screen alpha
+	int m_nScreenFadeActive;					// Active screen alpha
+	int m_nScreenFadeStep;						// Step change alpha on interval
+	float m_fScreenFadeInterval;				// Step change alpha interval
+
+	int m_nFadeAlpha;
+
+	enum FADE_ACTIONS
+	{
+		FADE_ACTION_NONE,
+		FADE_ACTION_IN,
+		FADE_ACTION_OUT		
+
+	} m_nFadeAction;
+
+	enum FADE_STATES
+	{
+		FADE_STATE_NONE,
+		FADE_STATE_OPENING,
+		FADE_STATE_CLOSING
+
+	} m_nFadeState;
+
+	// Dragging
+
+	enum DRAG_STATES
+	{
+		DRAG_STATE_NONE,
+		DRAG_STATE_WAITING,
+		DRAG_STATE_DRAGGING
+
+	} m_nDragState;
+
+	POINT m_ptDragOffset;
+
+	// Keyboard interface
+
+	CThunderScreen* m_pLastFocus;					// Last child with focus before deactivation (used to re-focus that child on activation)
+
+	list<CThunderScreen*> m_lstTabOrder;			// Pointers to screens to cycle through when user presses tab
+	map<int, CThunderScreen*> m_mapMnemonics;		// Pointers to screens mapped to character mnemonics (when key is pressed, screen is set focus to)
+
+	int m_nDefaultCmdID;							// ID of screen that is "clicked" when user hits enter
+	int m_nCancelCmdID;								// ID of screen that is "clicked" when user hits esc
+
+	// Font
+
+	CThunderFont* m_pFont;							// Font used for text drawing (optional)
+
+public:
+	CHitman2DScreenOverlapped(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+	virtual ~CHitman2DScreenOverlapped(void);
+
+public:
+	//
+	// Creation
+	//
+
+	static CHitman2DScreenOverlapped* CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+
+	//
+	// Font
+	//
+
+	CThunderFont* GetFont(void);
+	void SetFont(CThunderFont* pFont);
+
+	//
+	// Mnemonic
+	//
+
+	void SetMnemonic(CThunderScreen* pScreen, int nMnemonic);
+
+	//
+	// Tab Order
+	//
+
+	void Tab(bool bNext);
+
+	//
+	// Close with fadeout if fading enabled
+	//
+
+	void Close(void);
+
+	//
+	// Serialization
+	//
+
+	virtual void Deserialize(const CThunderMLElem& rRoot);
+
+	//
+	// Diagnostics
+	//
+
+	virtual DWORD GetMemoryFootprint(void) const;
+
+	//
+	// Events
+	//
+
+	virtual void OnBeginDrag(void);
+	virtual void OnEndDrag(void);
+
+	virtual void OnBeginFade(void);
+	virtual void OnEndFade(void);
+
+	virtual void OnActivate(CThunderScreen* pOldActive);
+	virtual void OnDeactivate(CThunderScreen* pNewActive);
+
+	virtual void OnFocus(CThunderScreen* pOldFocus);
+
+	virtual void OnTimer(CThunderTimer& rTimer);
+	virtual int OnNotify(int nNotifyID, CThunderScreen* pSender = NULL, int nParam = 0);
+
+	virtual void OnKeyDown(int nKeyCode);
+
+	virtual void OnMouseMove(POINT pt);
+	virtual void OnMouseLDown(POINT pt);
+	virtual void OnMouseLUp(POINT pt);
+};
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenImage class - TODO: animation support
+\*----------------------------------------------------------*/
+
+class CHitman2DScreenImage: public CThunderScreen
+{
+public:
+	CHitman2DScreenImage(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+	~CHitman2DScreenImage(void);
+
+public:
+	//
+	// Creation
+	//
+
+	static CHitman2DScreenImage* CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+};
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenLabel class - static text
+\*----------------------------------------------------------*/
+
+class CHitman2DScreenLabel: public CThunderScreen
+{
+private:
+	DWORD m_dwTextFlags;
+	CThunderFont* m_pFont;
+	CThunderString m_strText;
+
+public:
+	CHitman2DScreenLabel(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+	~CHitman2DScreenLabel(void);
+
+public:
+	//
+	// Creation
+	//
+
+	static CHitman2DScreenLabel* CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+
+	//
+	// Text
+	//
+
+	const CThunderString& GetText(void) const;
+	void SetText(LPCWSTR pszText);
+
+	//
+	// Rendering
+	//
+
+	virtual void OnRender(LPCRECT prc);
+
+	//
+	// Serialization
+	//
+
+	virtual void Deserialize(const CThunderMLElem& rRoot);
+
+	//
+	// Diagnostics
+	//
+
+	virtual DWORD GetMemoryFootprint(void) const;
+};
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenButton class - minimal skinning support
+\*----------------------------------------------------------*/
+
+class CHitman2DScreenButton: public CThunderScreen
+{
+protected:
+	H2D_SCREENBUTTON_STATES m_nState;									// Current state texture to display as background
+
+	bool m_bPushed;														// Pushed in?
+	bool m_bHover;														// Mouse over?
+	bool m_bToggle;														// If toggle button, is toggled?
+
+	bool m_bNoStateTextures;											// Do not use textures for each state, use the "background" texture
+	bool m_bNoStateBlends;												// Do not use blends for each state, use the default screen blend
+
+	CThunderString m_strCommandScript;									// File name of script to execute on command
+	CThunderString m_strCommandLabel;									// Label to start executing from
+
+	CThunderTextureInstanceDynamic m_states[H2D_SCREENBUTTON_STATE_COUNT];	// State textures
+
+	CThunderColor m_clrStateBlends[H2D_SCREENBUTTON_STATE_COUNT];			// Blend ARGB for each state
+
+public:
+	CHitman2DScreenButton(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+	~CHitman2DScreenButton(void);
+
+public:
+	//
+	// Creation
+	//
+
+	static CHitman2DScreenButton* CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+
+	//
+	// State
+	//
+
+	H2D_SCREENBUTTON_STATES GetState(void) const;
+
+	//
+	// Toggle
+	//
+
+	bool GetToggle(void) const;
+	void SetToggle(bool bToggle);
+
+	//
+	// Command
+	//
+
+	const CThunderString& GetCommandScript(void) const;
+	void SetCommandScript(LPCWSTR pszCommand);
+
+	const CThunderString& GetCommandLabel(void) const;
+	void SetCommandLabel(LPCWSTR pszLabel);
+
+	//
+	// State Textures
+	//
+
+	const CThunderTextureInstanceDynamic& GetBackgroundConst(H2D_SCREENBUTTON_STATES nState) const;
+	CThunderTextureInstanceDynamic& GetBackground(H2D_SCREENBUTTON_STATES nState);
+
+	CThunderColor& GetBlend(H2D_SCREENBUTTON_STATES nState);
+	const CThunderColor& GetBlendConst(H2D_SCREENBUTTON_STATES nState) const;
+	void SetBlend(H2D_SCREENBUTTON_STATES nState, D3DCOLOR clrBlend);
+
+	//
+	// Serialization
+	//
+
+	virtual void Deserialize(const CThunderMLElem& rRoot);
+
+	//
+	// Diagnostics
+	//
+
+	virtual DWORD GetMemoryFootprint(void) const;
+
+	//
+	// Events
+	//
+
+	virtual void OnMouseLDown(POINT pt);
+	virtual void OnMouseLUp(POINT pt);
+	virtual void OnMouseEnter(void);
+	virtual void OnMouseLeave(void);
+	virtual void OnKeyDown(int nKeyCode);
+	virtual void OnKeyUp(int nKeyCode);
+	virtual void OnFocus(CThunderScreen* pOldFocus);
+	virtual void OnDefocus(CThunderScreen* pNewFocus);
+	virtual void OnAction(void);
+
+private:
+	//
+	// Private Functions
+	//
+
+	void UpdateState(bool bRender);
+};
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenButtonEx class - fixed height skinning
+\*----------------------------------------------------------*/
+
+class CHitman2DScreenButtonEx: public CHitman2DScreenButton
+{
+protected:
+	CThunderFont* m_pFontCaption;					// Font used to render caption
+	CThunderFont* m_pFontDescription;				// Font used to render description
+
+	CThunderColor m_clrCaption;						// Color used to render caption
+	CThunderColor m_clrDescription;					// Color used to render description
+
+	CThunderString m_strCaption;					// Caption text
+	CThunderString m_strDescription;				// Description text
+
+	CThunderTextureInstanceDynamic m_Icon;			// Icon texture
+
+	CThunderTextureInstanceDynamic m_Left;			// Left corner texture
+	CThunderTextureInstanceDynamic m_Right;			// Right corner texture
+	CThunderTextureInstanceDynamic m_CenterRepeat;	// Center texture that repeats last pixel (if stretching required)
+
+	D3DXVECTOR3 m_vrRightPos;						// Cached position of right corner texture
+	D3DXVECTOR3 m_vrCenterPos;						// Cached position of center texture
+	D3DXVECTOR3 m_vrIconPos;						// Cached position of icon texture
+
+	RECT m_rcCaption;								// Cached position of caption text
+	RECT m_rcDescription;							// Cached position of description text
+
+	int m_nMargin;									// Margin space
+
+public:
+	CHitman2DScreenButtonEx(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+	~CHitman2DScreenButtonEx(void);
+
+public:
+	//
+	// Creation
+	//
+
+	static CHitman2DScreenButtonEx* CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+
+	//
+	// Text
+	//
+
+	const CThunderString& GetCaption(void) const;
+	void SetCaption(LPCWSTR pszCaption);
+
+	const CThunderString& GetDescription(void) const;
+	void SetDescription(LPCWSTR pszDescription);
+
+	//
+	// Fonts
+	//
+
+	CThunderFont* GetCaptionFont(void);
+	void SetCaptionFont(CThunderFont* pCaptionFont);
+
+	CThunderFont* GetDescriptionFont(void);
+	void SetDescriptionFont(CThunderFont* pDescriptionFont);
+
+	//
+	// Colors
+	//
+
+	CThunderColor& GetCaptionColor(void);
+	const CThunderColor& GetCaptionColorConst(void) const;
+	void SetCaptionColor(D3DCOLOR clrCaption);
+
+	CThunderColor& GetDescriptionColor(void);
+	const CThunderColor& GetDescriptionColorConst(void) const;
+	void SetDescriptionColor(D3DCOLOR clrDescription);
+
+	//
+	// Textures
+	//
+
+	CThunderTextureInstanceDynamic& GetIcon(void);
+	CThunderTextureInstanceDynamic& GetBackgroundLeft(void);
+	CThunderTextureInstanceDynamic& GetBackgroundRight(void);
+	CThunderTextureInstanceDynamic& GetBackgroundCenterRepeat(void);
+
+	//
+	// Layout
+	//
+
+	int GetMargin(void) const;
+	void SetMargin(int nIconMargin);
+
+	void UpdateLayout(void); // Call after changing texture coordinates
+
+	//
+	// Rendering
+	//
+
+	virtual void OnRender(LPCRECT prc);
+
+	//
+	// Serialization
+	//
+
+	virtual void Deserialize(const CThunderMLElem& rRoot);
+
+	//
+	// Diagnostics
+	//
+
+	virtual DWORD GetMemoryFootprint(void) const;
+
+	//
+	// Events
+	//
+
+	virtual void OnMove(const POINT& rptOldPos);
+	virtual void OnSize(const SIZE& rpsOldSize);
+};
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenProgressBar class - progress bar
+\*----------------------------------------------------------*/
+
+class CHitman2DScreenProgressBar: public CThunderScreen
+{
+private:
+	int m_nProgressMin;								// Progress Range Minimum
+	int m_nProgressMax;								// Progress Range Maximum
+	int m_nProgress;								// Progress Value
+
+	int m_nBlips;									// Cached number of blips to render
+
+	const CThunderTextureInstanceDynamic* m_pLeft;	// Left corner texture
+	const CThunderTextureInstanceDynamic* m_pRight;	// Right corner texture
+	const CThunderTextureInstanceDynamic* m_pBlip;	// Blip texture
+
+	CThunderTextureInstanceDynamic m_Center;		// Center repeating texture
+
+	D3DXVECTOR3 m_vrCenter;							// Cached position of center texture
+	D3DXVECTOR3 m_vrRight;							// Cached position of right texture
+
+public:
+	CHitman2DScreenProgressBar(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+	~CHitman2DScreenProgressBar(void);
+
+public:
+	//
+	// Creation
+	//
+
+	static CHitman2DScreenProgressBar* CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+
+	//
+	// Textures
+	//
+
+	CThunderTextureInstanceDynamic& GetBackgroundCenter(void);
+
+	//
+	// Progress
+	//
+
+	int GetProgressMin(void) const;
+	void SetProgressMin(int nProgressMin);
+
+	int GetProgressMax(void) const;
+	void SetProgressMax(int nProgressMax);
+
+	int GetProgress(void) const;
+	void SetProgress(int nProgress);
+
+	//
+	// Rendering
+	//
+
+	virtual void OnRender(LPCRECT prc);
+
+	//
+	// Serialization
+	//
+
+	virtual void Deserialize(const CThunderMLElem& rRoot);
+
+	//
+	// Diagnostics
+	//
+
+	virtual DWORD GetMemoryFootprint(void) const;
+
+	//
+	// Events
+	//
+
+	virtual void OnMove(const POINT& rptOldPos);
+	virtual void OnSize(const SIZE& rpsOldSize);
+
+	virtual void OnMouseMove(POINT pt);
+	virtual void OnMouseLDown(POINT pt);
+	virtual void OnMouseLUp(POINT pt);
+
+	//
+	// Private Functions
+	//
+
+	void CacheProgress(void);
+};
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenScrollBar class
+\*----------------------------------------------------------*/
+
+class CHitman2DScreenScrollBar: public CThunderScreen
+{
+private:
+	enum TIMERS														// Timer event IDs sent to this screen
+	{
+		TIMER_WAITARROW,											// Wait before auto-scrolling when one of the arrows is pushed
+		TIMER_ARROW,												// Auto-scroll when one of the arrows is pushed
+		TIMER_WAITSHAFT,											// Wait before auto-scrolling when shaft is pushed
+		TIMER_SHAFT													// Auto-scroll when shaft is pushed, to that position
+	};
+
+private:
+	int m_nMin;														// Scrolling range minimum
+	int m_nMax;														// Scrolling range maximum
+	int m_nPos;														// Scrolling position
+	int m_nPage;													// Scrolling page size
+
+	int m_nShaftSize;												// Cached size of shaft (scroll area)
+	int m_nMinThumbSize;											// Cached min size of thumb
+	int m_nThumbSize;												// Cached size of thumb
+	int m_nThumbPos;												// Current thumb position in pixels
+
+	int m_nMinThumbEdge;											// Minimum size of top or left edge of thumb
+	int m_nMinThumbCenter;											// Minimum size of center
+	int m_nThumbCenter;												// Current size of thumb center element
+
+	float m_fPixelsPerUnit;											// Number of pixels per scroll unit
+
+	float m_fWaitArrowAutoScroll;									// Time to wait before auto-scrolling arrows (in seconds)
+	float m_fArrowAutoScrollInterval;								// Time to wait between arrow auto-scrolls (in seconds)
+	float m_fWaitShaftAutoScroll;									// Time to wait before auto-scrolling shaft (in seconds)
+	float m_fShaftAutoScrollInterval;								// Time to wait between shaft auto-scrolls (in seconds)
+
+	CThunderTimer* m_pTimerAutoScroll;								// Keep track of auto-scroll timer for easy if-set check
+
+	bool m_bMouseDown;												// Was mouse button pushed and not yet let up?
+	H2D_SCREENSCROLLBAR_HITTEST m_nHitOnMouseDown;					// What was hit last time mouse button was pushed
+
+	POINT m_ptDragOffset;											// Offset when dragging thumb or scrolling shaft
+
+	H2D_SCREENSCROLLBAR_ELEM_STATES
+		m_nElemStates[H2D_SCREENSCROLLBAR_HIT_COUNT];				// Scrollbar element states
+
+	CThunderTextureInstanceDynamic
+		m_Elems[H2D_SCREENSCROLLBAR_ELEM_COUNT]
+			   [H2D_SCREENSCROLLBAR_ELEM_STATE_COUNT];				// Scrollbar element textures
+
+	RECT m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_COUNT];				// Cached hit test rectangles, also used for rendering
+
+	int m_nShaftPartsSize[2];										// Sizes for two parts of shaft
+
+public:
+	CHitman2DScreenScrollBar(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+	virtual ~CHitman2DScreenScrollBar(void);
+
+public:
+	//
+	// Creation
+	//
+
+	static CHitman2DScreenScrollBar* CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+
+	//
+	// Values
+	//
+
+	int GetMin(void) const;
+	void SetMin(int nMin);
+
+	int GetMax(void) const;
+	void SetMax(int nMax);
+
+	int GetValue(void) const;
+	void SetValue(int nValue);
+
+	int GetPageSize(void) const;
+	void SetPageSize(int nPageSize);
+
+	//
+	// Elements
+	//
+
+	H2D_SCREENSCROLLBAR_ELEM_STATES GetState(H2D_SCREENSCROLLBAR_HITTEST nElem);
+
+	CThunderTextureInstanceDynamic& GetBackground(H2D_SCREENSCROLLBAR_ELEMS nElem, H2D_SCREENSCROLLBAR_ELEM_STATES nState);
+	const CThunderTextureInstanceDynamic& GetBackgroundConst(H2D_SCREENSCROLLBAR_ELEMS nElem, H2D_SCREENSCROLLBAR_ELEM_STATES nState) const;
+
+	//
+	// Rendering
+	//
+
+	virtual void OnRender(LPCRECT prc);
+
+	//
+	// Serialization
+	//
+
+	virtual void Deserialize(const CThunderMLElem& rRoot);
+
+	//
+	// Diagnostics
+	//
+
+	virtual DWORD GetMemoryFootprint(void) const;
+
+	//
+	// Events
+	//
+
+	virtual void OnSize(const SIZE& rpsOldSize);
+
+	virtual void OnMouseMove(POINT pt);
+	virtual void OnMouseLDbl(POINT pt);
+	virtual void OnMouseLDown(POINT pt);
+	virtual void OnMouseLUp(POINT pt);
+	virtual void OnMouseLeave(void);
+
+	virtual void OnTimer(CThunderTimer& rTimer);
+
+private:
+	//
+	// Private Functions
+	//
+
+	void UpdateThumbFromPosition(void);
+	void UpdatePositionFromThumb(void);
+
+	void UpdateThumbSize(void);
+	void UpdateShaftSize(void);
+	void UpdateShaftSplit(void);
+
+	void ScrollShaft(void);
+
+	H2D_SCREENSCROLLBAR_HITTEST HitTest(POINT pt);
+};
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenFrame class - skinned rectangle/line
+\*----------------------------------------------------------*/
+
+class CHitman2DScreenFrame: public CThunderScreen
+{
+private:
+	CThunderTextureInstanceDynamic
+		m_Elements[H2D_SCREENFRAME_ELEMENT_COUNT];	// Texture elements of the frame
+
+	D3DXVECTOR3 m_vrTopRight;						// Cached position of top right corner
+	D3DXVECTOR3 m_vrBottomRight;					// Cached position of bottom right corner
+	D3DXVECTOR3 m_vrCenter;							// Cached position of center (top left corner of center repeat)
+
+public:
+	CHitman2DScreenFrame(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+	virtual ~CHitman2DScreenFrame(void);
+
+public:
+	//
+	// Creation
+	//
+
+	static CHitman2DScreenFrame* CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+
+	//
+	// Background
+	//
+
+	CThunderTextureInstanceDynamic& GetBackground(H2D_SCREENFRAME_ELEMENTS nElem);
+	const CThunderTextureInstanceDynamic& GetBackgroundConst(H2D_SCREENFRAME_ELEMENTS nElem) const;
+
+	//
+	// Rendering
+	//
+
+	virtual void OnRender(LPCRECT prc);
+
+	//
+	// Serialization
+	//
+
+	virtual void Deserialize(const CThunderMLElem& rRoot);
+
+	//
+	// Diagnostics
+	//
+
+	virtual DWORD GetMemoryFootprint(void) const;
+
+	//
+	// Events
+	//
+
+	virtual void OnMove(const POINT& ptOldPosition);
+	virtual void OnSize(const SIZE& psOldSize);
+};
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenListBox class - list box
+\*----------------------------------------------------------*/
+
+class CHitman2DScreenListBox: public CThunderScreen
+{
+private:
+	int m_nFirstVisibleItem;							// Index of first visible item
+	int m_nVisibleItems;								// Number of items that could be visible
+	int m_nSelectedItem;								// Index of currently selected item
+
+	int m_nMargin;										// Edge margin
+	int m_nItemHeight;									// Item height
+
+	CHitman2DScreenFrame* m_pFrame;						// Border frame
+	CHitman2DScreenScrollBar* m_pScrollbar;				// Scrollbar
+	vector<CHitman2DScreenButtonEx*> m_arItems;			// Buttons allocated for each item (with radio style)
+
+public:
+	CHitman2DScreenListBox(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+	~CHitman2DScreenListBox(void);
+
+public:
+	//
+	// Creation
+	//
+
+	static CHitman2DScreenListBox* CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+
+	//
+	// Items
+	//
+
+	int AddItem(LPCWSTR pszCaption, LPCWSTR pszDescription = NULL);
+	int AddItem(LPCWSTR pszCaption, LPCWSTR pszDescription, const CThunderTextureInstanceDynamic& rIcon, D3DCOLOR clrCaption = 0, D3DCOLOR clrDescription = 0);
+
+	void InsertItem(int nIndex, LPCWSTR pszCaption, LPCWSTR pszDescription = NULL);
+	void InsertItem(int nIndex, LPCWSTR pszCaption, LPCWSTR pszDescription, const CThunderTextureInstanceDynamic& rIcon, D3DCOLOR clrCaption = 0, D3DCOLOR clrDescription = 0);
+
+	int GetItemCount(void) const;
+
+	const CHitman2DScreenButtonEx& GetItemConst(int nIndex) const;
+	CHitman2DScreenButtonEx& GetItem(int nIndex);
+
+	void RemoveItem(int nIndex);
+	void RemoveAllItems(void);
+
+	vector<CHitman2DScreenButtonEx*>::iterator GetFirstItemPos(void);
+	vector<CHitman2DScreenButtonEx*>::const_iterator GetFirstItemPosConst(void);
+	vector<CHitman2DScreenButtonEx*>::iterator GetLastItemPos(void);
+	vector<CHitman2DScreenButtonEx*>::const_iterator GetLastItemPosConst(void);
+
+	int GetSelectedItem(void) const;
+	void SetSelectedItem(int nSelectedItem);
+
+	bool IsItemVisible(int nIndex) const;
+	void EnsureItemVisible(int nIndex);
+
+	void PreallocateItems(int nCount);
+
+	int GetMargin(void) const;
+	void SetMargin(int nMargin);
+
+	int GetItemHeight(void) const;
+	void SetItemHeight(int nItemHeight);
+
+	//
+	// Rendering
+	//
+
+	virtual void OnRender(LPCRECT prc);
+
+	//
+	// Events
+	//
+
+	virtual void OnSize(const SIZE& rpsOldSize);
+
+private:
+	void UpdateVisible(void);
+};
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenFps class - frame rate counter
+\*----------------------------------------------------------*/
+
+class CHitman2DScreenFps: public CHitman2DScreenOverlapped
+{
+private:
+	bool m_bExtended;								// Currently extended?
+
+	int m_nLastFps;									// Last value of frames per second counter
+	float m_fLastSpf;								// Last value of seconds per frame counter
+
+	CThunderFont* m_pExtendedFont;					// Font used to render seconds per frame and milliseconds per frame
+
+	RECT m_rcTextPos;								// Text rect for fps
+	RECT m_rcExtTextPosS;							// Text rect for spf
+	RECT m_rcExtTextPosMs;							// Text rect for mspf
+
+	CThunderTextureInstanceDynamic m_normalBackground;	// Background for simple fps display
+	CThunderTextureInstanceDynamic m_extendedBackground;	// Background for extended version of fps
+
+	WCHAR m_szFps[8];								// Current text for fps
+	WCHAR m_szSpf[16];								// Current text for spf
+	WCHAR m_szMspf[16];								// Current text for mspf
+
+public:
+	CHitman2DScreenFps(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+	virtual ~CHitman2DScreenFps(void);
+
+public:
+	//
+	// Creation
+	//
+
+	static CHitman2DScreenFps* CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+
+	//
+	// Extended
+	//
+
+	void SetExtended(bool bExtended);
+	bool GetExtended(void) const;
+
+	//
+	// Rendering
+	//
+
+	virtual void OnRender(LPCRECT prc);
+
+	//
+	// Serialization
+	//
+
+	virtual void Deserialize(const CThunderMLElem& rRoot);
+
+	//
+	// Diagnostics
+	//
+
+	virtual DWORD GetMemoryFootprint(void) const;
+
+	//
+	// Events
+	//
+
+	virtual void OnMove(const POINT& rptOldPos);
+};
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenConsole class - command console
+\*----------------------------------------------------------*/
+
+class CHitman2DScreenConsole: public CHitman2DScreenOverlapped
+{
+private:
+	enum TIMERS
+	{
+		TIMER_SLIDE = 1
+	};
+
+	enum CONSTANTS
+	{
+		MARGIN_WIDTH = 5,
+		MARGIN_HEIGHT = 5,
+		PROMPT_ALPHA_STEP = 10
+	};
+
+	enum MOVEACTIONS
+	{
+		MOVE_NONE,
+		MOVE_IN,
+		MOVE_OUT
+	};
+
+	bool m_bFullOpen;												// Is console fully open?
+	bool m_bReopen;													// Is console re-opening?
+	bool m_bReclose;												// Is console re-closing?
+	bool m_bJustToggled;											// Was console toggling key just pressed?
+
+	bool m_bEnableFlash;											// Flash prompt character?
+	float m_fLastFlash;												// Last time prompt flashed
+	int m_nPromptAlpha;												// Current prompt alpha
+	bool m_bFlashUp;												// Whether to increase alpha up or down (to flash)
+
+	bool m_bReplaceMode;											// Editing mode: replace mode instead of insert?
+	bool m_bAddToLine;												// Adding to last printed line instead of printing a new line?
+
+	int m_nColumnWidth;												// Width of one character
+	int m_nLineHeight;												// Height of a line of characters
+	int m_nPromptWidth;												// Width of the prompt character
+
+	int m_nLines;													// Total number of lines allocated for the console
+	int m_nColumns;													// Number of characters per line
+	int m_nInputColumns;											// Number of characters in the input line
+
+	int m_nFirstVisible;											// First visible line
+
+	int m_nOpenPos;													// Vertical position of the console screen when its fully open
+
+	int m_nInputScroll;												// Number of columns by which input line is currently scrolled
+	int m_nCaretPos;												// Index of column in the input line where the caret is
+
+	int m_nHistoryPos;												// Index of currently used line in history buffer
+	int m_nHistoryLines;											// Number of lines in history buffer
+	int m_nHistoryUsed;												// Number of used lines in history buffer
+
+	MOVEACTIONS m_nMoveAction;										// Type of movement if any
+	CThunderTimer* m_pMoveTimer;									// Timer fired when console is in movement
+
+	LPWSTR* m_ppszLines;											// Text output lines in the console (each is a pointer to string)
+	LPWSTR m_pszInputLine;											// Line used for inputting text, kept separate from text lines
+	LPWSTR* m_ppszHistory;											// Lines of previously entered, saved commands
+
+	LPRECT m_prcLines;												// Rectangles calculated for text lines
+	D3DCOLOR* m_pclrLines;											// Colors for each text output line
+
+	D3DXVECTOR3 m_vrPrompt;											// Calculated position for the prompt character
+	D3DXVECTOR3 m_vrCaret;											// Calculated position for the caret character
+	D3DXVECTOR3 m_vrBorder;											// Calculated position for the bottom border
+
+	CThunderTextureInstanceDynamic m_PromptTexture;						// Texture used to draw prompt character
+	CThunderTextureInstanceDynamic m_CaretTexture;						// Texture used to draw caret character
+	CThunderTextureInstanceDynamic m_BorderTexture;						// Texture used to draw console border	
+
+	map<CThunderString, CThunderCommand*>::iterator
+		m_posNextCommand;											// Next command for command cycling
+
+public:
+	CHitman2DScreenConsole(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+	virtual ~CHitman2DScreenConsole(void);
+
+public:
+	//
+	// Creation
+	//
+
+	static CHitman2DScreenConsole* CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+
+	//
+	// Rendering
+	//
+
+	virtual void OnRender(LPCRECT prc);
+
+	//
+	// Operations
+	//
+
+	void Toggle(bool bFullOpen = false);
+
+	void Print(LPCWSTR pszText = NULL, THU_PRINT_TYPES nPrintType = THU_PRINT_MESSAGE, bool bLine = true);
+
+	void Scroll(void);
+
+	//
+	// Serialization
+	//
+
+	virtual void Deserialize(const CThunderMLElem& rRoot);
+
+	//
+	// Deinitialization
+	//
+
+	virtual void Empty(void);
+
+	//
+	// Diagnostics
+	//
+
+	virtual DWORD GetMemoryFootprint(void) const;
+
+	//
+	// Events
+	//
+
+	virtual void OnActivate(CThunderScreen* pOldActive);
+	virtual void OnDeactivate(CThunderScreen* pNewActive);
+
+	virtual void OnTimer(CThunderTimer& rTimer);
+
+	virtual void OnKeyPress(int nAsciiCode);
+	virtual void OnKeyDown(int nKeyCode);
+
+	virtual void OnMouseLDown(POINT pt);
+
+private:
+	//
+	// Private Operations
+	//
+
+	void ClearInput(void);
+	void UpdateLines(void);
+	void UpdateCaret(void);
+};
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenCredits class
+\*----------------------------------------------------------*/
+
+class CHitman2DScreenCredits: public CHitman2DScreenOverlapped
+{
+private:
+	enum TIMERS
+	{
+		TIMER_SCROLL = 1
+	};
+
+	int m_nLineHeight;							// Height of one line of text
+	int m_nVisibleLines;						// Number of lines that can be visible at the same time
+	int m_nFirstVisibleLine;					// Index of first currently visible line
+	int m_nRenderOffset;						// Offset of first line rendered
+	int m_nScrollDistance;						// Pixels scrolled each time
+	float m_fScrollInterval;					// Scroll interval in seconds
+
+	CThunderTimer* m_pScrollTimer;				// Timers that scrolls lines
+
+	CHitman2DScreenImage* m_pTextContainer;		// Pointer to screen that contains scrolling text
+
+	vector<LPWSTR> m_arLines;					// Array of text lines parsed from credits text	
+
+public:
+	CHitman2DScreenCredits(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+	~CHitman2DScreenCredits(void);
+
+public:
+	//
+	// Creation
+	//
+
+	static CHitman2DScreenCredits* CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+
+	//
+	// Serialization
+	//
+
+	virtual void Deserialize(const CThunderMLElem& rRoot);
+
+	//
+	// Deinitialization
+	//
+
+	virtual void Empty(void);
+
+	//
+	// Diagnostics
+	//
+
+	virtual DWORD GetMemoryFootprint(void) const;
+
+	//
+	// Events
+	//
+
+	virtual void OnTimer(CThunderTimer& rTimer);
+	virtual void OnCommand(int nCommandID, CThunderScreen* pSender = NULL, int nParam = 0);
+};
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenPause class - pause screen
+\*----------------------------------------------------------*/
+
+class CHitman2DScreenPause: public CHitman2DScreenOverlapped
+{
+private:
+	float m_fBackgroundHeight;
+	int m_nBackgroundTile;
+
+	CHitman2DScreenImage* m_pSelectionImage;
+
+public:
+	CHitman2DScreenPause(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+	~CHitman2DScreenPause(void);
+
+public:
+	//
+	// Creation
+	//
+
+	static CHitman2DScreenPause* CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+
+	//
+	// Rendering
+	//
+
+	virtual void RenderBackground(void);
+
+	//
+	// Serialization
+	//
+
+	virtual void Deserialize(const CThunderMLElem& rRoot);
+
+	//
+	// Diagnostics
+	//
+
+	virtual DWORD GetMemoryFootprint(void) const;
+
+	//
+	// Events
+	//
+
+	virtual int OnNotify(int nNotifyID, CThunderScreen* pSender = NULL, int nParam = 0);
+
+	virtual void OnBeginFade(void);
+	virtual void OnEndFade(void);
+};
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenStart class - main menu
+\*----------------------------------------------------------*/
+
+class CHitman2DScreenStart: public CHitman2DScreenOverlapped
+{
+private:
+	bool m_bFirstTimeFade;					// Fading in for the first time? If so, fade the whole screen
+
+	CThunderColor m_clrOverlayBlend;		// Current blend for the blurry overlay texture that fades in/out
+
+	CThunderTextureInstanceDynamic m_Overlay;	// Overlay texture faded in when screen is deactivated
+	CThunderTextureInstanceDynamic m_Normal;	// Normal texture displayed when screen is active
+
+public:
+	CHitman2DScreenStart(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+	~CHitman2DScreenStart(void);
+
+public:
+	//
+	// Creation
+	//
+
+	static CHitman2DScreenStart* CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+
+	//
+	// Rendering
+	//
+
+	virtual void OnRender(LPCRECT prc);
+
+	//
+	// Serialization
+	//
+
+	virtual void Deserialize(const CThunderMLElem& rRoot);
+
+	//
+	// Diagnostics
+	//
+
+	virtual DWORD GetMemoryFootprint(void) const;
+
+	//
+	// Events
+	//
+
+	virtual void OnActivate(CThunderScreen* pOldActive);
+	virtual void OnTimer(CThunderTimer& rTimer);
+};
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenProgress class
+\*----------------------------------------------------------*/
+
+class CHitman2DScreenProgress: public CHitman2DScreenOverlapped
+{
+private:
+	bool m_bSession;								// Loading/saving session?
+	bool m_bCancel;									// Cancel button was clicked?
+
+	float m_fProgress[THU_PROGRESS_COUNT];			// Progress items. TODO: multiple map progress
+
+	CHitman2DScreenProgressBar* m_pScreenProgress;	// Cached pointer to progress bar child screen
+	CHitman2DScreenLabel* m_pScreenStatus;			// Cached pointer to status label child screen
+
+public:
+	CHitman2DScreenProgress(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+	~CHitman2DScreenProgress(void);
+
+public:
+	//
+	// Creation
+	//
+
+	static CHitman2DScreenProgress* CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+
+	//
+	// Progress
+	//
+
+	void SetProgress(THU_PROGRESS_TYPES nType, THU_PROGRESS_SUBTYPES nSubType, int nProgress, int nProgressMax);
+
+	bool IsAborted(void) const;
+
+	//
+	// Serialization
+	//
+
+	virtual void Deserialize(const CThunderMLElem& rRoot);
+
+	//
+	// Diagnostics
+	//
+
+	virtual DWORD GetMemoryFootprint(void) const;
+
+	//
+	// Events
+	//
+
+	virtual void OnCommand(int nCommandID, CThunderScreen* pSender = NULL, int nParam = 0);
+};
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenExit class
+\*----------------------------------------------------------*/
+
+class CHitman2DScreenExit: public CHitman2DScreenOverlapped
+{
+public:
+	CHitman2DScreenExit(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+	~CHitman2DScreenExit(void);
+
+public:
+	//
+	// Creation
+	//
+
+	static CHitman2DScreenExit* CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent);
+
+	//
+	// Events
+	//
+
+	virtual void OnCommand(int nCommandID, CThunderScreen* pSender = NULL, int nParam = 0);
+};
+
+#endif // HITMAN2D_SCREENS_H

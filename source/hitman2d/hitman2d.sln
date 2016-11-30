@@ -1,0 +1,38 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 9.00
+# Visual Studio 2005
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "HiTMAN: 2D", "hitman2d.vcproj", "{DC427AE6-6C3F-4A89-85FD-AFD733147399}"
+	ProjectSection(ProjectDependencies) = postProject
+		{81A7DCAD-ACCD-48DA-971A-DC9D5970BC1A} = {81A7DCAD-ACCD-48DA-971A-DC9D5970BC1A}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ThunderStorm", "..\ThunderStorm\ThunderStorm.vcproj", "{81A7DCAD-ACCD-48DA-971A-DC9D5970BC1A}"
+EndProject
+Global
+	GlobalSection(SubversionScc) = preSolution
+		Svn-Managed = True
+		Manager = AnkhSVN - Subversion Support for Visual Studio
+	EndGlobalSection
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DC427AE6-6C3F-4A89-85FD-AFD733147399}.Debug|Win32.ActiveCfg = Debug|Win32
+		{DC427AE6-6C3F-4A89-85FD-AFD733147399}.Debug|Win32.Build.0 = Debug|Win32
+		{DC427AE6-6C3F-4A89-85FD-AFD733147399}.Release|Win32.ActiveCfg = Release|Win32
+		{DC427AE6-6C3F-4A89-85FD-AFD733147399}.Release|Win32.Build.0 = Release|Win32
+		{81A7DCAD-ACCD-48DA-971A-DC9D5970BC1A}.Debug|Win32.ActiveCfg = Debug|Win32
+		{81A7DCAD-ACCD-48DA-971A-DC9D5970BC1A}.Debug|Win32.Build.0 = Debug|Win32
+		{81A7DCAD-ACCD-48DA-971A-DC9D5970BC1A}.Release|Win32.ActiveCfg = Release|Win32
+		{81A7DCAD-ACCD-48DA-971A-DC9D5970BC1A}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		AMDCaProjectFile = J:\HiTMAN 2D\source\hitman2d\CodeAnalyst\hitman2d.caw
+		AMDCaPersistentStartup = HiTMAN: 2D
+		AMDCaPersistentConfig = Release|Win32
+	EndGlobalSection
+EndGlobal

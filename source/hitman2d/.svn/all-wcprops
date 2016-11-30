@@ -1,0 +1,125 @@
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/hitman2d/!svn/ver/1/hitman2d/trunk
+END
+Hitman2DScreens.h
+K 25
+svn:wc:ra_dav:version-url
+V 57
+/svn/hitman2d/!svn/ver/2/hitman2d/trunk/Hitman2DScreens.h
+END
+stdafx.h
+K 25
+svn:wc:ra_dav:version-url
+V 48
+/svn/hitman2d/!svn/ver/2/hitman2d/trunk/stdafx.h
+END
+Hitman2DGame.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 56
+/svn/hitman2d/!svn/ver/2/hitman2d/trunk/Hitman2DGame.cpp
+END
+Hitman2DGame.h
+K 25
+svn:wc:ra_dav:version-url
+V 54
+/svn/hitman2d/!svn/ver/2/hitman2d/trunk/Hitman2DGame.h
+END
+Hitman2DDialogs.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 59
+/svn/hitman2d/!svn/ver/2/hitman2d/trunk/Hitman2DDialogs.cpp
+END
+Hitman2DGlobals.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 59
+/svn/hitman2d/!svn/ver/2/hitman2d/trunk/Hitman2DGlobals.cpp
+END
+Hitman2DDialogs.h
+K 25
+svn:wc:ra_dav:version-url
+V 57
+/svn/hitman2d/!svn/ver/2/hitman2d/trunk/Hitman2DDialogs.h
+END
+Hitman2DGlobals.h
+K 25
+svn:wc:ra_dav:version-url
+V 57
+/svn/hitman2d/!svn/ver/2/hitman2d/trunk/Hitman2DGlobals.h
+END
+Hitman2DError.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 57
+/svn/hitman2d/!svn/ver/2/hitman2d/trunk/Hitman2DError.cpp
+END
+hitman2d.sln
+K 25
+svn:wc:ra_dav:version-url
+V 52
+/svn/hitman2d/!svn/ver/2/hitman2d/trunk/hitman2d.sln
+END
+Hitman2DActors.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/svn/hitman2d/!svn/ver/2/hitman2d/trunk/Hitman2DActors.cpp
+END
+Hitman2DResources.rc
+K 25
+svn:wc:ra_dav:version-url
+V 60
+/svn/hitman2d/!svn/ver/2/hitman2d/trunk/Hitman2DResources.rc
+END
+Hitman2DError.h
+K 25
+svn:wc:ra_dav:version-url
+V 55
+/svn/hitman2d/!svn/ver/2/hitman2d/trunk/Hitman2DError.h
+END
+Hitman2DMaps.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 56
+/svn/hitman2d/!svn/ver/2/hitman2d/trunk/Hitman2DMaps.cpp
+END
+Hitman2DActors.h
+K 25
+svn:wc:ra_dav:version-url
+V 56
+/svn/hitman2d/!svn/ver/2/hitman2d/trunk/Hitman2DActors.h
+END
+hitman2d.vcproj
+K 25
+svn:wc:ra_dav:version-url
+V 55
+/svn/hitman2d/!svn/ver/2/hitman2d/trunk/hitman2d.vcproj
+END
+Hitman2DScreens.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 59
+/svn/hitman2d/!svn/ver/2/hitman2d/trunk/Hitman2DScreens.cpp
+END
+stdafx.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 50
+/svn/hitman2d/!svn/ver/2/hitman2d/trunk/stdafx.cpp
+END
+Hitman2DMaps.h
+K 25
+svn:wc:ra_dav:version-url
+V 54
+/svn/hitman2d/!svn/ver/2/hitman2d/trunk/Hitman2DMaps.h
+END
+resource.h
+K 25
+svn:wc:ra_dav:version-url
+V 50
+/svn/hitman2d/!svn/ver/2/hitman2d/trunk/resource.h
+END

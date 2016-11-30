@@ -1,0 +1,127 @@
+/*------------------------------------------------------------------*\
+|
+| Hitman2DMaps.h
+|
+|-------------------------------------------------------------------
+|
+| Content: HiTMAN: 2D map class(es)
+| Created: 12/21/2007
+|
+|-------------------------------------------------------------------
+| Copyright © Valeriy Novytskyy
+\*------------------------------------------------------------------*/
+
+#ifndef HITMAN2D_MAPS_H
+#define HITMAN2D_MAPS_H
+
+/*----------------------------------------------------------*\
+| CHitman2DMap class
+\*----------------------------------------------------------*/
+
+class CHitman2DMap: public CThunderMap
+{
+private:
+	LPD3DXEFFECT m_pEffect;							// Temporary Shader used to draw tiles and actors
+	D3DXHANDLE m_hWorldViewProj;					// Handle to worldviewproj shader constant
+	D3DXHANDLE m_hShadowmapWidth;					// Handle to shadowmapwidth shader constant
+	D3DXHANDLE m_hShadowmapHeight;					// Handle to shadowmapheight shader constant
+	D3DXHANDLE m_hShadowmapFactor;					// Handle to shadowmapfactor shader constant
+	D3DXHANDLE m_hFillMode;							// Handle to fillmode shader constant
+
+	float m_fShadowmapFactor;						// Used to set shader's shadowmap factor variable
+	float m_fShadowLengthFactor;					// Shadow length factor, the Z-angle of the light
+	D3DCOLOR m_clrDefaultShadowmapColor;			// Color used for undefined areas of shadowmap
+
+	int m_nDynamicShadows;							// Number of dynamic shadows (1 per visible actor)
+	LPDIRECT3DVERTEXBUFFER9 m_pDynamicShadowVB;		// Vertex buffer for dynamic shadow vertices (4 per visible actor)
+	LPDIRECT3DINDEXBUFFER9 m_pDynamicShadowIB;		// Index buffer for dynamic shadow indices (6 per visible actor)
+	bool m_bDynamicShadowsDirty;					// Update shadowmap on next frame?
+
+	LPDIRECT3DTEXTURE9 m_pShadowmap;				// Shadowmap created for the visible area (in video memory)
+	int m_nShadowmapTileSize;						// Size of shadowmap pieces that get loaded from files
+	int m_nShadowmapTilesX;							// Number of shadowmap pieces in each row
+	int m_nShadowmapTilesY;							// Number of shadowmap rows
+	SIZE m_psShadowmapSize;							// Size of shadowmap texture in pixels
+	vector<CThunderTexture*> m_arShadowmapTiles;	// Loaded shadowmap pieces (in managed memory)
+
+	CThunderTileVector m_vecLightDirection;			// Later, we will have multiple lights, several of them being current
+
+public:
+	CHitman2DMap(CThunderEngine& rEngine, LPCWSTR pszClass);
+	~CHitman2DMap(void);
+
+public:
+	//
+	// Creation
+	//
+
+	static CHitman2DMap* CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass);
+
+	//
+	// Update
+	//
+
+	virtual void Update(void);
+
+	//
+	// Rendering
+	//
+
+	virtual void Render();
+
+	//
+	// State
+	//
+
+	const CThunderTileVector& GetLightDirectionConst(void) const;
+	CThunderTileVector& GetLightDirection(void);
+	void SetLightDirection(const CThunderTileVector& rvecLightDirection);
+
+	float GetShadowmapFactor(void) const;
+	void SetShadowmapFactor(float fShadowmapFactor);
+
+	float GetShadowLengthFactor(void) const;
+	void SetShadowLengthFactor(float fShadowLengthFactor);
+
+	D3DCOLOR GetDefaultShadowmapColor(void) const;
+	void SetDefaultShadowmapColor(D3DCOLOR clrDefaultShadowmapColor);
+
+	int GetShadowmapTileSize(void) const;
+	void SetShadowmapTileSize(int nShadowmapTileSize);
+
+	int GetShadowmapTileCount(void) const;
+
+	CThunderTexture* GetShadowmapTile(int nIndex);
+	void SetShadowmapTile(int nIndex, CThunderTexture* pShadowmapTile);
+
+	void SetDynamicShadowsDirty(bool bDirty);
+
+	//
+	// Events
+	//
+
+	virtual void OnLostDevice(void);
+	virtual void OnResetDevice(void);
+
+	virtual void OnUpdateCamera(void);
+
+	virtual void OnMouseLDown(POINT pt);
+	virtual void OnMouseRDown(POINT pt);
+	virtual void OnMouseMDown(POINT pt);
+
+	virtual void SerializeUserData(CThunderStream& rStream, bool bInstance) const;
+	virtual void DeserializeUserData(CThunderStream& rStream, bool bInstance);
+
+protected:
+	//
+	// Private Functions
+	//
+
+	void CreateShadowmap(void);
+	void UpdateShadowmap(void);
+
+	void RenderStaticShadows(void);
+	void RenderDynamicShadows(void);
+};
+
+#endif // HITMAN2D_MAPS_H

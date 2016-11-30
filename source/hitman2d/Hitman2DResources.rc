@@ -1,0 +1,280 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "afxres.h"
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (U.S.) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+#ifdef _WIN32
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+#endif //_WIN32
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDI_HITMAN2D            ICON                    "./res/hitman2d.ico"
+IDI_HITMAN2DERROR       ICON                    "./res/error.ico"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
+
+1 VERSIONINFO
+ FILEVERSION 0,2,1,0
+ PRODUCTVERSION 0,2,1,0
+ FILEFLAGSMASK 0x17L
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x4L
+ FILETYPE 0x0L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "Comments", "HiTMAN: 2D Copyright © 2010 Valera's Software"
+            VALUE "CompanyName", "Valera's Software"
+            VALUE "FileDescription", "HiTMAN: 2D"
+            VALUE "FileVersion", "0.2.1.0"
+            VALUE "InternalName", "hitman2d"
+            VALUE "LegalCopyright", "Copyright (C) 2010 Valera's Software"
+            VALUE "OriginalFilename", "hitman2d.exe"
+            VALUE "ProductName", "Valera's Software HiTMAN: 2D"
+            VALUE "ProductVersion", "0.2.1.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
+
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "resource.h\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\r\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""afxres.h""\r\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_CONFIGURE DIALOGEX 0, 0, 301, 334
+STYLE DS_SETFONT | DS_FIXEDSYS | DS_CENTER | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU
+EXSTYLE WS_EX_APPWINDOW
+CAPTION "HiTMAN: 2D Configuration"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    GROUPBOX        "Graphics",IDC_STATIC,13,8,276,153
+    LTEXT           "&Resolution:",IDC_STATIC,24,42,37,8
+    COMBOBOX        IDC_RESOLUTION,90,42,107,254,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "",IDC_SPIN_RESOLUTION,"msctls_updown32",UDS_ARROWKEYS,198,42,11,13
+    CONTROL         "&Full Screen",IDC_FULLSCREEN,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,90,62,51,10
+    LTEXT           "For&mat:",IDC_STATIC,24,79,26,8
+    COMBOBOX        IDC_FORMAT,90,79,114,234,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "",IDC_SPIN_FORMAT,"msctls_updown32",UDS_ARROWKEYS,205,79,11,13
+    LTEXT           "Refres&h:",IDC_STATIC,24,123,29,8
+    COMBOBOX        IDC_REFRESH,90,123,89,214,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "",IDC_SPIN_REFRESH,"msctls_updown32",UDS_ARROWKEYS,180,123,11,13
+    CONTROL         "&VSync",IDC_VSYNC,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,91,142,35,10
+    PUSHBUTTON      "Advanced...",IDC_VIDEO_ADVANCED,218,133,61,18
+    GROUPBOX        "Audio",IDC_STATIC,13,167,276,88
+    LTEXT           "&Effects Volume:",IDC_STATIC,24,206,51,8
+    CONTROL         "",IDC_SLIDER_EFFECTSVOLUME,"msctls_trackbar32",TBS_BOTH | TBS_NOTICKS | WS_TABSTOP,85,206,86,11
+    LTEXT           "0",IDC_STATIC_EFFECTSVOLUME,173,206,27,8
+    LTEXT           "S&peech Volume:",IDC_STATIC,24,221,52,8
+    CONTROL         "",IDC_SLIDER_SPEECHVOLUME,"msctls_trackbar32",TBS_BOTH | TBS_NOTICKS | WS_TABSTOP,85,220,86,11
+    LTEXT           "0",IDC_STATIC_SPEECHVOLUME,173,221,27,8
+    LTEXT           "Musi&c Volume:",IDC_STATIC,24,236,46,8
+    CONTROL         "",IDC_SLIDER_MUSICVOLUME,"msctls_trackbar32",TBS_BOTH | TBS_NOTICKS | WS_TABSTOP,85,235,86,11
+    LTEXT           "0",IDC_STATIC_MUSICVOLUME,173,235,27,8
+    PUSHBUTTON      "Advanced...",IDC_AUDIO_ADVANCED,218,182,61,18
+    GROUPBOX        "Startup",IDC_STATIC,13,260,276,40
+    DEFPUSHBUTTON   "Launch",IDSAVELAUNCH,13,307,61,18
+    PUSHBUTTON      "Discard && Launch",IDDISCARDLAUNCH,81,307,64,18
+    PUSHBUTTON      "Save && Exit",IDSAVEEXIT,160,307,61,18
+    PUSHBUTTON      "Discard && Exit",IDCANCEL,228,307,61,18
+    LTEXT           "Adapter:",IDC_STATIC,24,23,30,8
+    LTEXT           "",IDC_STATIC_ADAPTER,90,23,181,8
+    PUSHBUTTON      "Advanced...",IDC_STARTUP_ADVANCED,218,273,61,18
+    CONTROL         "&Always Show Configuration Dialog",IDC_SHOWCONFIGURE,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,23,278,125,10
+    LTEXT           "Anti-A&lias:",IDC_STATIC,24,101,34,8
+    COMBOBOX        IDC_ANTIALIAS,90,101,89,89,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "",IDC_SPIN_ANTIALIAS,"msctls_updown32",UDS_ARROWKEYS,180,101,11,13
+    COMBOBOX        IDC_ANTIALIASQUALITY,198,101,69,56,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "",IDC_SPIN_AAQ,"msctls_updown32",UDS_ARROWKEYS,268,101,11,13
+    LTEXT           "* Desktop resolution",IDC_STATIC,215,44,66,8
+    LTEXT           "Destination:",IDC_STATIC,24,182,58,8
+    COMBOBOX        IDC_AUDIODEST,89,182,90,14,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+END
+
+IDD_AUDIO DIALOGEX 0, 0, 283, 154
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Advanced Audio"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    CONTROL         "E&xclusive Sound",IDC_EXCLUSIVESOUND,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,17,15,67,10
+    LTEXT           "Check to enable DirectSound exclusive mode which can result in better audio performance but also can make sounds from other programs inaudible.",IDC_STATIC,26,28,245,20
+    CONTROL         "Disable &Sounds",IDC_DISABLESOUNDS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,17,52,64,10
+    LTEXT           "Check to disable loading and playing of sounds. This decreases memory footprint and results in better performance.",IDC_STATIC,26,66,250,20
+    CONTROL         "Disable &Music",IDC_DISABLEMUSIC,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,17,89,58,10
+    LTEXT           "Check to disable loading and playing of music. This decreases memory footprint and results in better performance.",IDC_STATIC,27,103,228,20
+    DEFPUSHBUTTON   "OK",IDOK,172,133,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,226,133,50,14
+END
+
+IDD_GRAPHICS DIALOGEX 0, 0, 244, 209
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Advanced Graphics"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    CONTROL         "Use &Hardware Acceleration",IDC_HWACCEL,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,18,15,103,10
+    LTEXT           "Check to enable using video card's graphics acceleration features. Required to run the game at interactive frame rates but disables some diagnostic and validation features.",IDC_STATIC,18,30,212,24
+    CONTROL         "Use &Software Vertex Processing (SWVP)",IDC_HWVP,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,18,62,145,10
+    LTEXT           "Check to enable vertex processing in software only. Required for shader debugging but will reduce shader performance.",IDC_STATIC,18,78,206,18
+    CONTROL         "E&nable Shader Debugging",IDC_SHD,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,18,101,98,10
+    LTEXT           "Check to include debugging information (such as symbols and line numbers) in effects compiled from source files at runtime.",IDC_STATIC,18,117,206,18
+    CONTROL         "Create &Pure Device",IDC_PURE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,18,141,78,10
+    LTEXT           "Check to enable video card driver to perform to its full capacity. Disables debugging and diagnostics in favor of better performance.",IDC_STATIC,18,156,218,21
+    DEFPUSHBUTTON   "OK",IDOK,132,185,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,186,185,50,14
+END
+
+IDD_STARTUP DIALOGEX 0, 0, 272, 187
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Advanced Startup"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    LTEXT           "&Startup Script Path:",IDC_STATIC,18,15,64,8
+    EDITTEXT        IDC_SCRIPTFILEPATH,18,31,181,14,ES_AUTOHSCROLL
+    PUSHBUTTON      "Browse...",IDC_BROWSESCRIPTPATH,205,31,50,14
+    LTEXT           "&Controls Profile Path:",IDC_STATIC,18,55,69,8
+    EDITTEXT        IDC_CONTROLSPATH,18,71,181,14,ES_AUTOHSCROLL
+    PUSHBUTTON      "Browse...",IDC_BROWSECONTROLSPATH,206,71,50,14
+    LTEXT           "&Log File Path:",IDC_STATIC,18,93,44,8
+    EDITTEXT        IDC_LOGFILEPATH,18,108,181,14,ES_AUTOHSCROLL
+    PUSHBUTTON      "Browse...",IDC_BROWSELOGPATH,205,108,50,14
+    LTEXT           "Logging &Mode:",IDC_STATIC,18,133,52,11
+    COMBOBOX        IDC_LOGMODE,18,147,84,16,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    DEFPUSHBUTTON   "OK",IDOK,161,166,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,215,166,50,14
+    PUSHBUTTON      "&Clear Log",IDC_CLEARLOG,108,147,50,14
+END
+
+IDD_ERROR DIALOGEX 0, 0, 430, 89
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "HiTMAN: 2D Error"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,159,66,54,16
+    PUSHBUTTON      "&Copy",IDCOPY,217,66,54,16
+    EDITTEXT        IDC_TEXT,46,8,377,36,ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
+    CONTROL         "Don't display any more errors",IDC_NOTAGAIN,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,48,45,110,16
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO 
+BEGIN
+    IDD_CONFIGURE, DIALOG
+    BEGIN
+        LEFTMARGIN, 13
+        RIGHTMARGIN, 289
+        TOPMARGIN, 15
+        BOTTOMMARGIN, 325
+    END
+
+    IDD_AUDIO, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 276
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 147
+    END
+
+    IDD_GRAPHICS, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 236
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 199
+    END
+
+    IDD_STARTUP, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 265
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 180
+    END
+
+    IDD_ERROR, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 423
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 82
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+#endif    // English (U.S.) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+

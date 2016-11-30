@@ -1,0 +1,315 @@
+/*------------------------------------------------------------------*\
+|
+| Hitman2DGame.h
+|
+|-------------------------------------------------------------------
+|
+| Content: HiTMAN: 2D game class
+| Created: 06/30/2007
+|
+|-------------------------------------------------------------------
+| Copyright © Valeriy Novytskyy
+\*------------------------------------------------------------------*/
+
+#ifndef HITMAN2D_GAME_H
+#define HITMAN2D_GAME_H
+
+/*----------------------------------------------------------*\
+| Includes
+\*----------------------------------------------------------*/
+
+#include "Hitman2DScreens.h"	// using CThunderTheme, referencing CHitman2DScreenConsole, CHitman2DScreenProgress
+
+/*----------------------------------------------------------*\
+| Constants
+\*----------------------------------------------------------*/
+
+enum H2D_SOUNDINST_FLAGS		// Sound Instance flags
+{
+	H2D_SOUNDINST_SPEECH = 8,		// This sound is in the speech logical channel
+	H2D_SOUNDINST_SUSPENDED = 16	// This sound has been suspended due to game deactivation
+};
+
+enum H2D_MUSIC_FLAGS			// Music flags
+{
+	H2D_MUSIC_SUSPENDED = 4			// This music has been suspended due to game deactivation
+};
+
+enum H2D_VIDEO_FLAGS			// Video flags
+{
+	H2D_VIDEO_SUSPENDED = 2			// This video has been suspended due to game deactivation
+};
+
+enum H2D_CONTROLS				// Actions mapped to controls
+{
+	// Game
+
+	H2D_CONTROL_GAME_PAUSE,			// Pause menu
+	H2D_CONTROL_GAME_SCREENSHOT,	// Take screenshot
+
+	// Debug
+
+	H2D_CONTROL_DEBUG_CONSOLE,		// Debug - show console
+	H2D_CONTROL_DEBUG_EXIT,			// Debug - instant exit
+	H2D_CONTROL_DEBUG_FILLMODE,		// Debug - toggle fill mode
+	H2D_CONTROL_DEBUG_TEST,			// Debug - execute test command
+
+	// Editor
+
+	H2D_CONTROL_EDITOR_CAMERAUP,	// Editor - move camera up
+	H2D_CONTROL_EDITOR_CAMERADOWN,	// Editor - move camera down
+	H2D_CONTROL_EDITOR_CAMERALEFT,	// Editor - move camera left
+	H2D_CONTROL_EDITOR_CAMERARIGHT,	// Editor - move camera right
+
+	H2D_CONTROL_COUNT				// Number of actions defined
+};
+
+
+/*----------------------------------------------------------*\
+| CHitman2DGame class
+\*----------------------------------------------------------*/
+
+class CHitman2DGame: public CThunderGame
+{
+private:
+	//
+	// Game state
+	//
+
+	CHitman2DScreenConsole* m_pConsole;			// Pointer to console screen, if loaded
+	CHitman2DScreenProgress* m_pLoading;		// Pointer to loading screen, when used
+
+	bool m_bProgressMapInstance;				// Loading or saving map instance?
+	bool m_bLastProgressAborted;				// Last progress aborted?
+
+	__int64 m_qwLastBench;						// Performance counter of last benchmark (used by cmd_benchmark)
+
+	//
+	// Game settings
+	//
+
+	// Audio
+
+	float m_fMusicVolume;						// Volume of all music resources playing
+	float m_fEffectsVolume;						// Volume used by effects sound instances
+	float m_fSpeechVolume;						// Volume used by speech sound instances
+
+	// Startup
+
+	CThunderString m_strScriptPath;				// Startup script path
+	CThunderString m_strControlsProfilePath;	// Profile path for storing key mappings
+
+	bool m_bConfigure;							// Display a configuration dialog on InitializeEngine?
+	bool m_bConfigureExternal;					// m_bConfigure was set externally
+
+	// Controls
+
+	int m_nControls[H2D_CONTROL_COUNT];			// Controls
+
+public:
+	CHitman2DGame(void);
+	~CHitman2DGame(void);
+
+public:
+	//
+	// Execution
+	//
+
+	virtual void ProcessCommandLine(LPCWSTR pszCmdLine);
+
+	virtual void DeserializeSettings(const CThunderIniFile& rProfile);
+
+	virtual void InitializeEngine(void);
+
+	virtual void InitializeInstance(void);
+
+			void RegisterVariables(void);
+			void RegisterCommands(void);
+			void RegisterClasses(void);
+
+	virtual void SerializeSettings(CThunderIniFile& rProfile);
+
+	virtual void DestroyInstance(void);
+
+	virtual void OnError(const CThunderError& rError);
+
+	//
+	// Game State
+	//
+
+	CHitman2DScreenConsole* GetConsole(void);
+	void SetConsole(CHitman2DScreenConsole* pConsole);
+
+	//
+	// Game Settings
+	//
+
+	// Audio
+
+	float GetMusicVolume(void) const;
+	void SetMusicVolume(float fMusicVolume);
+
+	float GetEffectsVolume(void) const;
+	void SetEffectsVolume(float fEffectsVolume);
+
+	float GetSpeechVolume(void) const;
+	void SetSpeechVolume(float fSpeechVolume);
+
+	// Startup
+
+	const CThunderString& GetScriptPath(void) const;
+	void SetScriptPath(LPCWSTR pszScriptPath);
+
+	const CThunderString& GetControlsProfilePath(void) const;
+	void SetControlsProfilePath(LPCWSTR pszControlsPath);
+
+	bool GetShowConfigure(void) const;
+	void SetShowConfigure(bool bShowConfigure);
+
+	bool GetConfigureExternal(void) const;
+
+	// Controls	
+
+	void DeserializeControlSettings(void);
+	void SerializeControlSettings(void);
+
+	int GetControl(H2D_CONTROLS nControl) const;
+	void SetControl(H2D_CONTROLS nControl, int nKey);
+
+	//
+	// Events
+	//
+
+	virtual void OnKeyDown(int nKeyCode);
+
+	//
+	// Events
+	//
+
+	virtual void OnSessionPause(bool bPause);
+
+	virtual void OnLogStart(void);
+
+	virtual void OnProgress(THU_PROGRESS_TYPES nType, THU_PROGRESS_SUBTYPES nSubType, int nProgress, int nProgressMax);
+
+	virtual void OnThemeChange(const CThunderTheme& rNewTeme);
+
+	//
+	// Diagnostics
+	//
+
+	virtual void Print(LPCWSTR pszString, THU_PRINT_TYPES nPrintType, bool bLine = true);
+
+	virtual DWORD GetMemoryFootprint(void) const;	
+
+	static int DebugAllocHook(int nAllocType, void* pUserData, size_t nAllocSize, int nBlockType, long nRequestNumber, const unsigned char* pszFileName, int nLineNumber);
+
+	//
+	// Deinitialization
+	//
+
+	void Empty(void);
+
+	//
+	// Commands
+	//
+
+	// Console
+
+	static int cmd_openconsole(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_print(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_clear(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_execute(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_shell(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_vartype(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_mapvar(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_echo(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_dir(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_curdir(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_exit(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_help(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+
+	// Resources
+	
+	static int cmd_load(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_unload(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_reload(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_makeregion(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_regiontotexture(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_verifyunicode(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+
+	// Graphics
+
+	static int cmd_customcursor(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_loadcustomcursor(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_showcursor(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);	
+	static int cmd_showscreen(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_loadscreen(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_closescreen(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_showfps(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_alignfps(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_showstart(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_minimize(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_pausegame(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_screenshot(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_fillmode(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	//static int cmd_debug(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+
+	// Audio
+
+	static int cmd_mastervolume(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_mastermute(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_musicvolume(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_effectsvolume(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_speechvolume(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_playsound(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_playmusic(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_stopsound(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_stopmusic(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+
+	// Video
+
+	static int cmd_playvideo(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_stopvideo(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+
+	// Diagnostics
+
+	static int cmd_status(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_list(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);	
+	static int cmd_about(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_settings(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_configure(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_logmode(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_wait(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_break(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_crash(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_benchmark(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_lasterror(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_errorexit(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_pony(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_test(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+
+	// Game
+
+	static int cmd_map(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_savemap(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_loadgame(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_savegame(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_quickload(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_quicksave(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_control(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+
+	// Engine
+
+	static int cmd_engineoption(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+	static int cmd_timemultiplier(CThunderEngine& rEngine, vector<CThunderVariable>& rParams);
+
+	//
+	// Helper Functions
+	//
+	
+	static void PrintFlags(DWORD dwFlags, const LPCWSTR* pszarFlags, const DWORD* dwarFlags, int nFlagsCount, CThunderString& strFlagsOut, LPCWSTR pszSepBefore, LPCWSTR pszSepAfter);
+	static void PrintLastError(CThunderEngine& rEngine);
+};
+
+#endif

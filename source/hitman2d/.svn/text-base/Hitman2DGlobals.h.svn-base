@@ -1,0 +1,939 @@
+/*------------------------------------------------------------------*\
+|
+| Hitman2DGlobals.h
+|
+|-------------------------------------------------------------------
+|
+| Content: HiTMAN: 2D global constants and functions
+| Created: 08/12/2007
+|
+|-------------------------------------------------------------------
+| Copyright © Valeriy Novytskyy
+\*------------------------------------------------------------------*/
+
+#ifndef HITMAN2D_GLOBALS_H
+#define HITMAN2D_GLOBALS_H
+
+/*----------------------------------------------------------*\
+| Declarations
+\*----------------------------------------------------------*/
+
+class CThunderEngine;		// referencing CThunderEngine
+class CThunderErrorStack;	// referencing CThunderErrorStack
+class CThunderString;		// referencing CThunderString
+
+
+/*----------------------------------------------------------*\
+| Constants
+\*----------------------------------------------------------*/
+
+const LPCWSTR H2D_SZ_ENGINE_OPTIONS[] =		{
+												L"THU_OPTION_MANAGECOM",
+												L"THU_OPTION_MANAGEGAMEWINDOW",
+
+												L"THU_OPTION_TILESIZE",
+												L"THU_OPTION_RENDERMAP",
+												L"THU_OPTION_RENDERSCREENS",
+												L"THU_OPTION_CUSTOMCURSOR",
+												L"THU_OPTION_SHOWCURSOR",
+
+												L"THU_OPTION_DISABLESOUNDS",
+												L"THU_OPTION_DISABLEMUSIC",
+												L"THU_OPTION_EXCLUSIVESOUND",
+												L"THU_OPTION_SOUNDCACHEFREQUENCY",
+
+												L"THU_OPTION_ENABLERESOURCECACHE",
+												L"THU_OPTION_RESOURCECACHEDURATION",
+												L"THU_OPTION_RESOURCECACHEFREQUENCY",
+												L"THU_OPTION_ENABLESTREAMCACHE",
+												L"THU_OPTION_STREAMCACHEDURATION",
+												L"THU_OPTION_STREAMCACHEFREQUENCY",
+
+												L"THU_OPTION_ENABLENETWORKING",
+												L"THU_OPTION_NETPORT",		
+												
+												L"THU_OPTION_GAMEEVENTS",
+												L"THU_OPTION_SCREENEVENTS",
+												L"THU_OPTION_MAPEVENTS",
+												L"THU_OPTION_PROGRESSEVENTS",				
+												
+												L"THU_OPTION_ENABLEECHO",
+												
+											};
+
+const LPCWSTR H2D_SZ_MAPFLAGS[] =			{
+												L"THU_MAP_DEFAULT",
+
+												L"THU_MAP_RENDER_BACKGROUND",
+												L"THU_MAP_RENDER_BACKGROUND_ALPHA",
+												L"THU_MAP_RENDER_BACKGROUND_TILE",
+												L"THU_MAP_RENDER_BACKGROUND_STRETCH",
+												L"THU_MAP_RENDER_BACKGROUND_CENTER",
+												L"THU_MAP_RENDER_BACKGROUND_ANIMATED",
+												L"THU_MAP_RENDER_BACKGROUND_INCAMERA",
+
+												L"THU_MAP_RENDER_TILES",
+												L"THU_MAP_RENDER_TILES_ALPHA",
+
+												L"THU_MAP_RENDER_ACTORS",
+
+												L"THU_MAP_RENDER_CLIP",
+												
+												L"THU_MAP_UPDATE",
+												L"THU_MAP_UPDATE_ACTORS"
+											};
+
+const DWORD H2D_DW_MAPFLAGS[] =				{
+												THU_MAP_DEFAULT,
+
+												THU_MAP_RENDER_BACKGROUND,
+												THU_MAP_RENDER_BACKGROUND_ALPHA,
+												THU_MAP_RENDER_BACKGROUND_TILE,
+												THU_MAP_RENDER_BACKGROUND_STRETCH,
+												THU_MAP_RENDER_BACKGROUND_CENTER,
+												THU_MAP_RENDER_BACKGROUND_ANIMATED,
+												THU_MAP_RENDER_BACKGROUND_INCAMERA,
+												
+												THU_MAP_RENDER_TILES,
+												THU_MAP_RENDER_TILES_ALPHA,
+
+												THU_MAP_RENDER_ACTORS,
+												
+												THU_MAP_RENDER_CLIP,
+												
+												THU_MAP_UPDATE,
+												THU_MAP_UPDATE_ACTORS
+											};
+
+const LPCWSTR H2D_SZ_ACTORFLAGS[] =			{
+												L"THU_ACTOR_DEFAULT",
+												L"THU_ACTOR_RENDER_INVISIBLE",
+												L"THU_ACTOR_RENDER_CACHE",
+												L"THU_ACTOR_RENDER_INCAMERA",
+												L"THU_ACTOR_UPDATE",
+												L"THU_ACTOR_COLLISION"
+											};
+
+const DWORD H2D_DW_ACTORFLAGS[] =			{
+												THU_ACTOR_DEFAULT,
+												THU_ACTOR_RENDER_INVISIBLE,
+												THU_ACTOR_RENDER_CACHE,
+												THU_ACTOR_RENDER_INCAMERA,
+												THU_ACTOR_UPDATE,
+												THU_ACTOR_COLLISION
+											};
+
+const LPCWSTR H2D_SZ_THUDEVICETYPES[] =		{
+												L"D3DDEVTYPE_HAL",
+												L"D3DDEVTYPE_REF",
+												L"D3DDEVTYPE_NULLREF"
+											};
+
+const DWORD H2D_DW_THUDEVICETYPES[] =		{
+												D3DDEVTYPE_HAL,
+												D3DDEVTYPE_REF,
+												D3DDEVTYPE_NULLREF
+											};
+
+const LPCWSTR H2D_SZ_THUDEVICEFORMATS[] =	{
+												L"Desktop",
+												L"X8R8G8B8",
+												L"X1R5G5B5",
+												L"R5G6B5"
+											};
+
+const DWORD H2D_DW_THUDEVICEFORMATS[] =		{
+												THU_INVALID_VALUE,
+												D3DFMT_X8R8G8B8,
+												D3DFMT_X1R5G5B5,
+												D3DFMT_R5G6B5
+											};
+
+const LPCTSTR H2D_SZ_DEVICEFORMATS[] =		{
+												L"D3DFMT_R8G8B8",
+												L"D3DFMT_A8R8G8B8",
+												L"D3DFMT_X8R8G8B8",
+												L"D3DFMT_R5G6B5",
+												L"D3DFMT_X1R5G5B5",
+												L"D3DFMT_A1R5G5B5",
+												L"D3DFMT_A4R4G4B4",
+												L"D3DFMT_R3G3B2",
+												L"D3DFMT_A8",
+												L"D3DFMT_A8R3G3B2",
+												L"D3DFMT_X4R4G4B4",
+												L"D3DFMT_A2B10G10R10",
+												L"D3DFMT_A8B8G8R8",
+												L"D3DFMT_X8B8G8R8",
+												L"D3DFMT_G16R16",
+												L"D3DFMT_A2R10G10B10",
+												L"D3DFMT_A16B16G16R16"
+											};
+
+const DWORD H2D_DW_DEVICEFORMATS[] =		{
+												D3DFMT_R8G8B8,
+												D3DFMT_A8R8G8B8,
+												D3DFMT_X8R8G8B8,
+												D3DFMT_R5G6B5,
+												D3DFMT_X1R5G5B5,
+												D3DFMT_A1R5G5B5,
+												D3DFMT_A4R4G4B4,
+												D3DFMT_R3G3B2,
+												D3DFMT_A8R3G3B2,
+												D3DFMT_X4R4G4B4,
+												D3DFMT_A2B10G10R10,
+												D3DFMT_A8B8G8R8,
+												D3DFMT_X8B8G8R8,
+												D3DFMT_G16R16,
+												D3DFMT_A2R10G10B10,
+												D3DFMT_A16B16G16R16
+											};
+
+const LPCTSTR H2D_SZ_DEVICETYPE[] =			{
+												L"D3DDEVTYPE_HAL",
+												L"D3DDEVTYPE_REF",
+												L"D3DDEVTYPE_SW",
+												L"D3DDEVTYPE_NULLREF"
+											};
+
+const LPCTSTR H2D_SZ_SWAPEFFECT[3] =		{
+												L"D3DSWAPEFFECT_DISCARD",
+												L"D3DSWAPEFFECT_FLIP",
+												L"D3DSWAPEFFECT_COPY"
+											};
+
+const LPCWSTR H2D_SZ_DEVCAPS_1[] =			{
+												L"D3DCAPS_READ_SCANLINE"
+											};
+
+const DWORD H2D_DW_DEVCAPS_1[] =			{
+												D3DCAPS_READ_SCANLINE
+											};
+
+const LPCWSTR H2D_SZ_DEVCAPS_2[] =			{
+												L"D3DCAPS2_CANAUTOGENMIPMAP",
+												L"D3DCAPS2_CANCALIBRATEGAMMA",
+												L"D3DCAPS2_CANMANAGERESOURCE",
+												L"D3DCAPS2_DYNAMICTEXTURES",
+												L"D3DCAPS2_FULLSCREENGAMMA"
+											};
+
+const DWORD H2D_DW_DEVCAPS_2[] =			{
+												D3DCAPS2_CANAUTOGENMIPMAP,
+												D3DCAPS2_CANCALIBRATEGAMMA,
+												D3DCAPS2_CANMANAGERESOURCE,
+												D3DCAPS2_DYNAMICTEXTURES,
+												D3DCAPS2_FULLSCREENGAMMA
+											};
+
+const LPCWSTR H2D_SZ_DEVCAPS_3[] =			{
+												L"D3DCAPS3_ALPHA_FULLSCREEN_FLIP_OR_DISCARD",
+												L"D3DCAPS3_COPY_TO_VIDMEM",
+												L"D3DCAPS3_COPY_TO_SYSTEMMEM",
+												L"D3DCAPS3_LINEAR_TO_SRGB_PRESENTATION"
+											};
+
+const DWORD H2D_DW_DEVCAPS_3[] =			{
+												D3DCAPS3_ALPHA_FULLSCREEN_FLIP_OR_DISCARD,
+												D3DCAPS3_COPY_TO_VIDMEM,
+												D3DCAPS3_COPY_TO_SYSTEMMEM,
+												D3DCAPS3_LINEAR_TO_SRGB_PRESENTATION
+											};
+
+const LPCWSTR H2D_SZ_PRESENT[] =			{
+												L"D3DPRESENT_INTERVAL_IMMEDIATE",
+												L"D3DPRESENT_INTERVAL_ONE",
+												L"D3DPRESENT_INTERVAL_TWO",
+												L"D3DPRESENT_INTERVAL_THREE",
+												L"D3DPRESENT_INTERVAL_FOUR"
+											};
+
+const DWORD H2D_DW_PRESENT[] =				{
+												D3DPRESENT_INTERVAL_IMMEDIATE,
+												D3DPRESENT_INTERVAL_ONE,
+												D3DPRESENT_INTERVAL_TWO,
+												D3DPRESENT_INTERVAL_THREE,
+												D3DPRESENT_INTERVAL_FOUR
+											};
+
+const LPCWSTR H2D_SZ_CURSOR[] =				{
+												L"D3DCURSORCAPS_COLOR",
+												L"D3DCURSORCAPS_LOWRES"
+											};
+
+const DWORD H2D_DW_CURSOR[] =				{
+												D3DCURSORCAPS_COLOR,
+												D3DCURSORCAPS_LOWRES
+											};
+
+const LPCWSTR H2D_SZ_DEVCAPS_4[] =			{
+												L"D3DDEVCAPS_CANBLTSYSTONONLOCAL",
+												L"D3DDEVCAPS_CANRENDERAFTERFLIP",
+												L"D3DDEVCAPS_DRAWPRIMITIVES2",
+												L"D3DDEVCAPS_DRAWPRIMITIVES2EX",
+												L"D3DDEVCAPS_DRAWPRIMTLVERTEX",
+												L"D3DDEVCAPS_EXECUTESYSTEMMEMORY",
+												L"D3DDEVCAPS_EXECUTEVIDEOMEMORY",
+												L"D3DDEVCAPS_HWRASTERIZATION",
+												L"D3DDEVCAPS_HWTRANSFORMANDLIGHT",
+												L"D3DDEVCAPS_NPATCHES",
+												L"D3DDEVCAPS_PUREDEVICE",
+												L"D3DDEVCAPS_QUINTICRTPATCHES",
+												L"D3DDEVCAPS_RTPATCHES",
+												L"D3DDEVCAPS_RTPATCHHANDLEZERO",
+												L"D3DDEVCAPS_SEPARATETEXTUREMEMORIES",
+												L"D3DDEVCAPS_TEXTURENONLOCALVIDMEM",
+												L"D3DDEVCAPS_TEXTURESYSTEMMEMORY",
+												L"D3DDEVCAPS_TEXTUREVIDEOMEMORY",
+												L"D3DDEVCAPS_TLVERTEXSYSTEMMEMORY",
+												L"D3DDEVCAPS_TLVERTEXVIDEOMEMORY"
+											};
+
+const DWORD H2D_DW_DEVCAPS_4[] =			{
+												D3DDEVCAPS_CANBLTSYSTONONLOCAL,
+												D3DDEVCAPS_CANRENDERAFTERFLIP,
+												D3DDEVCAPS_DRAWPRIMITIVES2,
+												D3DDEVCAPS_DRAWPRIMITIVES2EX,
+												D3DDEVCAPS_DRAWPRIMTLVERTEX,
+												D3DDEVCAPS_EXECUTESYSTEMMEMORY,
+												D3DDEVCAPS_EXECUTEVIDEOMEMORY,
+												D3DDEVCAPS_HWRASTERIZATION,
+												D3DDEVCAPS_HWTRANSFORMANDLIGHT,
+												D3DDEVCAPS_NPATCHES,
+												D3DDEVCAPS_PUREDEVICE,
+												D3DDEVCAPS_QUINTICRTPATCHES,
+												D3DDEVCAPS_RTPATCHES,
+												D3DDEVCAPS_RTPATCHHANDLEZERO,
+												D3DDEVCAPS_SEPARATETEXTUREMEMORIES,
+												D3DDEVCAPS_TEXTURENONLOCALVIDMEM,
+												D3DDEVCAPS_TEXTURESYSTEMMEMORY,
+												D3DDEVCAPS_TEXTUREVIDEOMEMORY,
+												D3DDEVCAPS_TLVERTEXSYSTEMMEMORY,
+												D3DDEVCAPS_TLVERTEXVIDEOMEMORY
+											};
+
+const LPCWSTR H2D_SZ_PRIM[] =				{
+												L"D3DPMISCCAPS_MASKZ",
+												L"D3DPMISCCAPS_CULLNONE",
+												L"D3DPMISCCAPS_CULLCW",
+												L"D3DPMISCCAPS_CULLCCW",
+												L"D3DPMISCCAPS_COLORWRITEENABLE",
+												L"D3DPMISCCAPS_CLIPPLANESCALEDPOINTS",
+												L"D3DPMISCCAPS_CLIPTLVERTS",
+												L"D3DPMISCCAPS_TSSARGTEMP",
+												L"D3DPMISCCAPS_BLENDOP",
+												L"D3DPMISCCAPS_NULLREFERENCE",
+												L"D3DPMISCCAPS_INDEPENDENTWRITEMASKS",
+												L"D3DPMISCCAPS_PERSTAGECONSTANT",
+												L"D3DPMISCCAPS_FOGANDSPECULARALPHA",
+												L"D3DPMISCCAPS_SEPARATEALPHABLEND",
+												L"D3DPMISCCAPS_MRTINDEPENDENTBITDEPTHS",
+												L"D3DPMISCCAPS_MRTPOSTPIXELSHADERBLENDING",
+												L"D3DPMISCCAPS_FOGVERTEXCLAMPED"
+											};
+
+const DWORD H2D_DW_PRIM[] =					{ 
+												D3DPMISCCAPS_MASKZ,
+												D3DPMISCCAPS_CULLNONE,
+												D3DPMISCCAPS_CULLCW,
+												D3DPMISCCAPS_CULLCCW,
+												D3DPMISCCAPS_COLORWRITEENABLE,
+												D3DPMISCCAPS_CLIPPLANESCALEDPOINTS,
+												D3DPMISCCAPS_CLIPTLVERTS,
+												D3DPMISCCAPS_TSSARGTEMP,
+												D3DPMISCCAPS_BLENDOP,
+												D3DPMISCCAPS_NULLREFERENCE,
+												D3DPMISCCAPS_INDEPENDENTWRITEMASKS,
+												D3DPMISCCAPS_PERSTAGECONSTANT,
+												D3DPMISCCAPS_FOGANDSPECULARALPHA,
+												D3DPMISCCAPS_SEPARATEALPHABLEND,
+												D3DPMISCCAPS_MRTINDEPENDENTBITDEPTHS,
+												D3DPMISCCAPS_MRTPOSTPIXELSHADERBLENDING,
+												D3DPMISCCAPS_FOGVERTEXCLAMPED
+											};
+
+const LPCWSTR H2D_SZ_RAST[] =				{
+												L"D3DPRASTERCAPS_ANISOTROPY",
+												L"D3DPRASTERCAPS_COLORPERSPECTIVE",
+												L"D3DPRASTERCAPS_DITHER",
+												L"D3DPRASTERCAPS_DEPTHBIAS",
+												L"D3DPRASTERCAPS_FOGRANGE",
+												L"D3DPRASTERCAPS_FOGTABLE",
+												L"D3DPRASTERCAPS_FOGVERTEX",
+												L"D3DPRASTERCAPS_MIPMAPLODBIAS",
+												L"D3DPRASTERCAPS_MULTISAMPLE_TOGGLE",
+												L"D3DPRASTERCAPS_SCISSORTEST",
+												L"D3DPRASTERCAPS_SLOPESCALEDEPTHBIAS",
+												L"D3DPRASTERCAPS_WBUFFER",
+												L"D3DPRASTERCAPS_WFOG",
+												L"D3DPRASTERCAPS_ZBUFFERLESSHSR",
+												L"D3DPRASTERCAPS_ZFOG",
+												L"D3DPRASTERCAPS_ZTEST"
+};
+
+const DWORD H2D_DW_RAST[] =					{
+												D3DPRASTERCAPS_ANISOTROPY,
+												D3DPRASTERCAPS_COLORPERSPECTIVE,
+												D3DPRASTERCAPS_DITHER,
+												D3DPRASTERCAPS_DEPTHBIAS,
+												D3DPRASTERCAPS_FOGRANGE,
+												D3DPRASTERCAPS_FOGTABLE,
+												D3DPRASTERCAPS_FOGVERTEX,
+												D3DPRASTERCAPS_MIPMAPLODBIAS,
+												D3DPRASTERCAPS_MULTISAMPLE_TOGGLE,
+												D3DPRASTERCAPS_SCISSORTEST,
+												D3DPRASTERCAPS_SLOPESCALEDEPTHBIAS,
+												D3DPRASTERCAPS_WBUFFER,
+												D3DPRASTERCAPS_WFOG,
+												D3DPRASTERCAPS_ZBUFFERLESSHSR,
+												D3DPRASTERCAPS_ZFOG,
+												D3DPRASTERCAPS_ZTEST
+											};
+
+const LPCWSTR H2D_SZ_ZCMP[] =				{
+												L"D3DPCMPCAPS_ALWAYS",
+												L"D3DPCMPCAPS_EQUAL",
+												L"D3DPCMPCAPS_GREATER",
+												L"D3DPCMPCAPS_GREATEREQUAL",
+												L"D3DPCMPCAPS_LESS",
+												L"D3DPCMPCAPS_LESSEQUAL",
+												L"D3DPCMPCAPS_NEVER",
+												L"D3DPCMPCAPS_NOTEQUAL"
+											};
+
+const DWORD H2D_DW_ZCMP[] =					{
+												D3DPCMPCAPS_ALWAYS,
+												D3DPCMPCAPS_EQUAL,
+												D3DPCMPCAPS_GREATER,
+												D3DPCMPCAPS_GREATEREQUAL,
+												D3DPCMPCAPS_LESS,
+												D3DPCMPCAPS_LESSEQUAL,
+												D3DPCMPCAPS_NEVER,
+												D3DPCMPCAPS_NOTEQUAL
+											};
+
+const LPCWSTR H2D_SZ_SRCBLEND[] =			{ 
+												L"D3DPBLENDCAPS_BLENDFACTOR",
+												L"D3DPBLENDCAPS_BOTHINVSRCALPHA",
+												L"D3DPBLENDCAPS_BOTHSRCALPHA",
+												L"D3DPBLENDCAPS_DESTALPHA",
+												L"D3DPBLENDCAPS_DESTCOLOR",
+												L"D3DPBLENDCAPS_INVDESTALPHA",
+												L"D3DPBLENDCAPS_INVDESTCOLOR",
+												L"D3DPBLENDCAPS_INVSRCALPHA",
+												L"D3DPBLENDCAPS_INVSRCCOLOR",
+												L"D3DPBLENDCAPS_ONE",
+												L"D3DPBLENDCAPS_SRCALPHA",
+												L"D3DPBLENDCAPS_SRCALPHASAT",
+												L"D3DPBLENDCAPS_SRCCOLOR",
+												L"D3DPBLENDCAPS_ZERO"
+											};
+
+const DWORD H2D_DW_SRCBLEND[] =				{
+												D3DPBLENDCAPS_BLENDFACTOR,
+												D3DPBLENDCAPS_BOTHINVSRCALPHA,
+												D3DPBLENDCAPS_BOTHSRCALPHA,
+												D3DPBLENDCAPS_DESTALPHA,
+												D3DPBLENDCAPS_DESTCOLOR,
+												D3DPBLENDCAPS_INVDESTALPHA,
+												D3DPBLENDCAPS_INVDESTCOLOR,
+												D3DPBLENDCAPS_INVSRCALPHA,
+												D3DPBLENDCAPS_INVSRCCOLOR,
+												D3DPBLENDCAPS_ONE,
+												D3DPBLENDCAPS_SRCALPHA,
+												D3DPBLENDCAPS_SRCALPHASAT,
+												D3DPBLENDCAPS_SRCCOLOR,
+												D3DPBLENDCAPS_ZERO
+											};
+
+const LPCWSTR H2D_SZ_TEX[] =				{
+												L"D3DPTEXTURECAPS_ALPHA",
+												L"D3DPTEXTURECAPS_ALPHAPALETTE",
+												L"D3DPTEXTURECAPS_CUBEMAP",
+												L"D3DPTEXTURECAPS_CUBEMAP_POW2",
+												L"D3DPTEXTURECAPS_MIPCUBEMAP",
+												L"D3DPTEXTURECAPS_MIPMAP",
+												L"D3DPTEXTURECAPS_MIPVOLUMEMAP",
+												L"D3DPTEXTURECAPS_NONPOW2CONDITIONAL",
+												L"D3DPTEXTURECAPS_NOPROJECTEDBUMPENV",
+												L"D3DPTEXTURECAPS_PERSPECTIVE",
+												L"D3DPTEXTURECAPS_POW2",
+												L"D3DPTEXTURECAPS_PROJECTED",
+												L"D3DPTEXTURECAPS_SQUAREONLY",
+												L"D3DPTEXTURECAPS_TEXREPEATNOTSCALEDBYSIZE",
+												L"D3DPTEXTURECAPS_VOLUMEMAP",
+												L"D3DPTEXTURECAPS_VOLUMEMAP_POW2"
+											};
+
+const DWORD H2D_DW_TEX[] =					{
+												D3DPTEXTURECAPS_ALPHA,
+												D3DPTEXTURECAPS_ALPHAPALETTE,
+												D3DPTEXTURECAPS_CUBEMAP,
+												D3DPTEXTURECAPS_CUBEMAP_POW2,
+												D3DPTEXTURECAPS_MIPCUBEMAP,
+												D3DPTEXTURECAPS_MIPMAP,
+												D3DPTEXTURECAPS_MIPVOLUMEMAP,
+												D3DPTEXTURECAPS_NONPOW2CONDITIONAL,
+												D3DPTEXTURECAPS_NOPROJECTEDBUMPENV,
+												D3DPTEXTURECAPS_PERSPECTIVE,
+												D3DPTEXTURECAPS_POW2,
+												D3DPTEXTURECAPS_PROJECTED,
+												D3DPTEXTURECAPS_SQUAREONLY,
+												D3DPTEXTURECAPS_TEXREPEATNOTSCALEDBYSIZE,
+												D3DPTEXTURECAPS_VOLUMEMAP,
+												D3DPTEXTURECAPS_VOLUMEMAP_POW2
+											};
+
+const LPCWSTR H2D_SZ_TEXF[] =				{ 
+												L"D3DPTFILTERCAPS_MAGFPOINT",
+												L"D3DPTFILTERCAPS_MAGFLINEAR",
+												L"D3DPTFILTERCAPS_MAGFANISOTROPIC",
+												L"D3DPTFILTERCAPS_MAGFPYRAMIDALQUAD",
+												L"D3DPTFILTERCAPS_MAGFGAUSSIANQUAD",
+												L"D3DPTFILTERCAPS_MINFPOINT",
+												L"D3DPTFILTERCAPS_MINFLINEAR",
+												L"D3DPTFILTERCAPS_MINFANISOTROPIC",
+												L"D3DPTFILTERCAPS_MINFPYRAMIDALQUAD",
+												L"D3DPTFILTERCAPS_MINFGAUSSIANQUAD",
+												L"D3DPTFILTERCAPS_MIPFPOINT",
+												L"D3DPTFILTERCAPS_MIPFLINEAR"
+											};
+
+const DWORD H2D_DW_TEXF[] =					{
+												D3DPTFILTERCAPS_MAGFPOINT,
+												D3DPTFILTERCAPS_MAGFLINEAR,
+												D3DPTFILTERCAPS_MAGFANISOTROPIC,
+												D3DPTFILTERCAPS_MAGFPYRAMIDALQUAD,
+												D3DPTFILTERCAPS_MAGFGAUSSIANQUAD,
+												D3DPTFILTERCAPS_MINFPOINT,
+												D3DPTFILTERCAPS_MINFLINEAR,
+												D3DPTFILTERCAPS_MINFANISOTROPIC,
+												D3DPTFILTERCAPS_MINFPYRAMIDALQUAD,
+												D3DPTFILTERCAPS_MINFGAUSSIANQUAD,
+												D3DPTFILTERCAPS_MIPFPOINT,
+												D3DPTFILTERCAPS_MIPFLINEAR
+											};
+
+const DWORD H2D_DW_CPUFLAGS[] =				{
+												1 << 0,
+												1 << 1,
+												1 << 2,
+												1 << 3,
+												1 << 4,
+												1 << 5,
+												1 << 6,
+												1 << 7,
+												1 << 8,
+												1 << 9,
+												1 << 10,
+												1 << 11,
+												1 << 12,
+												1 << 13,
+												1 << 14,
+												1 << 15,
+												1 << 16,
+												1 << 17,
+												1 << 18,
+												1 << 19,
+												1 << 20,
+												1 << 21,
+												1 << 22,
+												1 << 23,
+												1 << 24,
+												1 << 25,
+												1 << 26,
+												1 << 27,
+												1 << 28,
+												1 << 29,
+												1 << 30,
+												1 << 31
+											};
+const LPCWSTR H2D_SZ_CPUFLAGS[] =			{
+												L"FPU",
+												L"VME",
+												L"DE",
+												L"PSE",
+												L"TSC",
+												L"MSR",
+												L"PAE",
+												L"MCE",
+												L"CXCHG8",
+												L"APIC",
+												L"reserved",
+												L"SEP",
+												L"MTRR",
+												L"PGE",
+												L"MCA",
+												L"CMOV",
+												L"PAT",
+												L"PSE36",
+												L"PSN",
+												L"CLFL",
+												L"reserved",
+												L"DTES",
+												L"ACPI",
+												L"MMX",
+												L"FXSR",
+												L"SSE",
+												L"SSE2",
+												L"SS",
+												L"HTT",
+												L"TM1",
+												L"IA64",
+												L"PBE"
+											};
+
+const DWORD H2D_DW_DSCAPS[] =				{
+												DSCAPS_PRIMARYMONO,
+												DSCAPS_PRIMARYSTEREO,
+												DSCAPS_PRIMARY8BIT,
+												DSCAPS_PRIMARY16BIT,
+												DSCAPS_CONTINUOUSRATE,
+												DSCAPS_EMULDRIVER,
+												DSCAPS_CERTIFIED,
+												DSCAPS_SECONDARYMONO,
+												DSCAPS_SECONDARYSTEREO,
+												DSCAPS_SECONDARY8BIT,
+												DSCAPS_SECONDARY16BIT
+											};
+
+const LPCWSTR H2D_SZ_DSCAPS[] =				{
+												L"DSCAPS_PRIMARYMONO",
+												L"DSCAPS_PRIMARYSTEREO",
+												L"DSCAPS_PRIMARY8BIT",
+												L"DSCAPS_PRIMARY16BIT",
+												L"DSCAPS_CONTINUOUSRATE",
+												L"DSCAPS_EMULDRIVER",
+												L"DSCAPS_CERTIFIED",
+												L"DSCAPS_SECONDARYMONO",
+												L"DSCAPS_SECONDARYSTEREO",
+												L"DSCAPS_SECONDARY8BIT",
+												L"DSCAPS_SECONDARY16BIT"
+											};
+
+const DWORD H2D_DW_SPEAKERCONFIG[] =		{
+												DSSPEAKER_DIRECTOUT,
+												DSSPEAKER_HEADPHONE,
+												DSSPEAKER_MONO,
+												DSSPEAKER_QUAD,
+												DSSPEAKER_STEREO,
+												DSSPEAKER_SURROUND,
+												DSSPEAKER_5POINT1, // old
+												DSSPEAKER_7POINT1,
+												DSSPEAKER_7POINT1_SURROUND,
+												DSSPEAKER_7POINT1_WIDE,
+												0x00000009 // new
+											};
+
+const LPCWSTR H2D_SZ_SPEAKERCONFIG[] =		{
+												L"DSSPEAKER_DIRECTOUT",
+												L"DSSPEAKER_HEADPHONE",
+												L"DSSPEAKER_MONO",
+												L"DSSPEAKER_QUAD",
+												L"DSSPEAKER_STEREO",
+												L"DSSPEAKER_SURROUND",
+												L"DSSPEAKER_5POINT1 [old]",
+												L"DSSPEAKER_7POINT1",
+												L"DSSPEAKER_7POINT1_SURROUND",
+												L"DSSPEAKER_7POINT1_WIDE",
+												L"DSSPEAKER_5POINT1_SURROUND [new]"
+											};
+
+const DWORD H2D_DW_SPEAKERGEOMETRY[] =		{
+												DSSPEAKER_GEOMETRY_MIN,
+												DSSPEAKER_GEOMETRY_NARROW,
+												DSSPEAKER_GEOMETRY_WIDE,
+												DSSPEAKER_GEOMETRY_MAX
+											};
+
+const LPCWSTR H2D_SZ_SPEAKERGEOMETRY[] =	{
+												L"DSSPEAKER_GEOMETRY_MIN",
+												L"DSSPEAKER_GEOMETRY_NARROW",
+												L"DSSPEAKER_GEOMETRY_WIDE",
+												L"DSSPEAKER_GEOMETRY_MAX"
+											};
+
+const int H2D_N_SWFLAGS[] =					{
+												SW_HIDE,
+												SW_MAXIMIZE,
+												SW_MINIMIZE,
+												SW_RESTORE,
+												SW_SHOW,
+												SW_SHOWDEFAULT,
+												SW_SHOWMAXIMIZED,
+												SW_SHOWMINIMIZED,
+												SW_SHOWMINNOACTIVE,
+												SW_SHOWNA,
+												SW_SHOWNOACTIVATE,
+												SW_SHOWNORMAL
+											};
+
+const LPCWSTR H2D_SZ_SWFLAGS[] =			{
+												L"SW_HIDE",
+												L"SW_MAXIMIZE",
+												L"SW_MINIMIZE",
+												L"SW_RESTORE",
+												L"SW_SHOW",
+												L"SW_SHOWDEFAULT",
+												L"SW_SHOWMAXIMIZED",
+												L"SW_SHOWMINIMIZED",
+												L"SW_SHOWMINNOACTIVE",
+												L"SW_SHOWNA",
+												L"SW_SHOWNOACTIVATE",
+												L"SW_SHOWNORMAL"
+											};
+
+const LPCWSTR H2D_SZ_PRINTTYPES[] =			{
+												L"message",
+												L"echo",
+												L"error",
+												L"warning",
+												L"info",
+												L"debug",
+												L"clear"
+											};
+
+const int H2D_N_PRINTTYPES[] =				{
+												THU_PRINT_MESSAGE,
+												THU_PRINT_ECHO,
+												THU_PRINT_ERROR,
+												THU_PRINT_WARNING,
+												THU_PRINT_INFO,
+												THU_PRINT_DEBUG,
+												THU_PRINT_CLEAR
+											};
+
+const LPCWSTR H2D_SZ_VKMAP[] =				{
+												L"invalid",
+												L"left mouse button",
+												L"right mouse button",
+												L"cancel",
+												L"middle mouse button",
+												L"x mouse button 1",
+												L"x mouse button 2",
+												L"unassigned",
+												L"backspace",
+												L"tab",
+												L"reserved",
+												L"reserved",
+												L"clear",
+												L"enter",
+												L"unassigned",
+												L"unassigned",
+												L"shift",
+												L"ctrl",
+												L"alt",
+												L"pause",
+												L"caps lock",
+												L"kana",
+												L"unassigned",
+												L"junja",
+												L"final",
+												L"hanja",
+												L"unassigned",
+												L"esc",
+												L"convert",
+												L"nonconvert",
+												L"accept",
+												L"mode change",
+												L"space",
+												L"pg up",
+												L"pg down",
+												L"end",
+												L"home",
+												L"left",
+												L"up",
+												L"right",
+												L"down",
+												L"select",
+												L"print",
+												L"execute",
+												L"prt scn",
+												L"insert",
+												L"delete",
+												L"help",
+												L"0",
+												L"1",
+												L"2",
+												L"3",
+												L"4",
+												L"5",
+												L"6",
+												L"7",
+												L"8",
+												L"9", // 0x39
+												L"unassigned",
+												L"unassigned",
+												L"unassigned",
+												L"unassigned",
+												L"unassigned",
+												L"unassigned",
+												L"unassigned",
+												L"a", // 0x41
+												L"b",
+												L"c",
+												L"d",
+												L"e",
+												L"f",
+												L"g",
+												L"h",
+												L"i",
+												L"j",
+												L"k",
+												L"l",
+												L"m",
+												L"n",
+												L"o",
+												L"p",
+												L"q",
+												L"r",
+												L"s",
+												L"t",
+												L"u",
+												L"v",
+												L"w",
+												L"x",
+												L"y",
+												L"z",
+												L"lwin",
+												L"rwin",
+												L"apps",
+												L"reserved",
+												L"sleep",
+												L"numpad 0",
+												L"numpad 1",
+												L"numpad 2",
+												L"numpad 3",
+												L"numpad 4",
+												L"numpad 5",
+												L"numpad 6",
+												L"numpad 7",
+												L"numpad 8",
+												L"numpad 9",
+												L"numpad *",
+												L"numpad +",
+												L"separator",
+												L"numpad -",
+												L"numpad .",
+												L"numpad /",
+												L"f1",
+												L"f2",
+												L"f3",
+												L"f4",
+												L"f5",
+												L"f6",
+												L"f7",
+												L"f8",
+												L"f9",
+												L"f10",
+												L"f11",
+												L"f12",
+												L"f13",
+												L"f14",
+												L"f15",
+												L"f16",
+												L"f17",
+												L"f18",
+												L"f19",
+												L"f20",
+												L"f21",
+												L"f22",
+												L"f23",
+												L"f24",
+												L"unassigned", // 0x88
+												L"unassigned",
+												L"unassigned",
+												L"unassigned",
+												L"unassigned",
+												L"unassigned",
+												L"unassigned",
+												L"unassigned", // 0x8F
+												L"num lock",
+												L"scroll lock",
+												L"numpad =",
+												L"unassigned",
+												L"unassigned",
+												L"unassigned",
+												L"unassigned",
+												L"unassigned",
+												L"unassigned", // 0x97
+												L"unassigned",
+												L"unassigned",
+												L"unassigned",
+												L"unassigned",
+												L"unassigned",
+												L"unassigned",
+												L"unassigned", // 0x9F
+												L"lshift",
+												L"rshift",
+												L"lctrl",
+												L"rctrl",
+												L"lalt",
+												L"ralt",
+												L"browser back",
+												L"browser forward",
+												L"browser refresh",
+												L"browser stop",
+												L"browser search",
+												L"browser favorites",
+												L"browser home",
+												L"volume mute",
+												L"volume down",
+												L"volume up",
+												L"media next track",
+												L"media previous track",
+												L"media stop",
+												L"media play/pause",
+												L"launch mail",
+												L"launch media select",
+												L"launch app 1",
+												L"launch app 2",
+												L"reserved",
+												L"reserved",
+												L";",
+												L"+",
+												L",",
+												L"-",
+												L".",
+												L"/",
+												L"~",
+												L"reserved", // 0xC1
+												L"reserved",
+												L"reserved",
+												L"reserved",
+												L"reserved",
+												L"reserved",
+												L"reserved",
+												L"reserved",
+												L"reserved",
+												L"reserved",
+												L"reserved",
+												L"reserved",
+												L"reserved",
+												L"reserved",
+												L"reserved",
+												L"reserved",
+												L"reserved",
+												L"reserved",
+												L"reserved",
+												L"reserved",
+												L"reserved",
+												L"reserved",
+												L"reserved", // 0xD7
+												L"unassigned", // 0xD8
+												L"unassigned",
+												L"unassigned", // 0xDA
+												L"[",
+												L"\\",
+												L"]",
+												L"'"
+											};
+
+/*----------------------------------------------------------*\
+| Declarations
+\*----------------------------------------------------------*/
+
+float FormatMemory(DWORD dwSizeInBytes, LPCWSTR* ppszUnits);
+THU_RESOURCE_TYPES DetectResourceType(LPCWSTR pszPath, bool bExamineContents = false, CThunderErrorStack* pErrors = NULL);	
+D3DXIMAGE_FILEFORMAT ImageFormatFromExtension(LPCWSTR pszExt);
+
+#endif // HITMAN2D_GLOBALS_H

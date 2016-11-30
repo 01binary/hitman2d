@@ -1,0 +1,105 @@
+/*------------------------------------------------------------------*\
+|
+| Hitman2DError.cpp
+|
+|-------------------------------------------------------------------
+|
+| Content: HiTMAN: 2D error class(es)
+| Created: 08/05/2008
+|
+|-------------------------------------------------------------------
+| Copyright © Valeriy Novytskyy
+\*------------------------------------------------------------------*/
+
+/*----------------------------------------------------------*\
+| Includes
+\*----------------------------------------------------------*/
+
+#include "stdafx.h"
+#include "Hitman2DError.h"
+
+
+/*----------------------------------------------------------*\
+| CHitman2DErrorEngineVersion implementation
+\*----------------------------------------------------------*/
+
+CHitman2DErrorEngineVersion::CHitman2DErrorEngineVersion(LPCWSTR pszFunctionName,
+														 DWORD dwCurrentVersion,
+														 DWORD dwRequiredVersion):
+
+														 CThunderError(pszFunctionName),
+														 m_dwCurrentVersion(dwCurrentVersion),
+														 m_dwRequiredVersion(dwRequiredVersion)
+{
+	try
+	{
+		CThunderString strMessage;
+		strMessage.Format(L"Invalid engine version (0x%x), required 0x%x.", dwCurrentVersion, dwRequiredVersion);
+
+		m_strDescription = m_strHeader + strMessage;
+	}
+	
+	catch(bad_alloc e) {}
+}
+
+DWORD CHitman2DErrorEngineVersion::GetCurrentVersion(void) const
+{
+	return m_dwCurrentVersion;
+}
+
+DWORD CHitman2DErrorEngineVersion::GetRequiredVersion(void) const
+{
+	return m_dwRequiredVersion;
+}
+
+CThunderError* CHitman2DErrorEngineVersion::Duplicate(void) const
+{
+	return new CHitman2DErrorEngineVersion(m_pszFunctionName, m_dwCurrentVersion, m_dwRequiredVersion);
+}
+
+/*----------------------------------------------------------*\
+| CHitman2DErrorConfigureExit implementation
+\*----------------------------------------------------------*/
+
+CHitman2DErrorConfigureExit::CHitman2DErrorConfigureExit(LPCWSTR pszFunctionName):
+														 CThunderError(pszFunctionName)
+{
+	try
+	{
+		m_strDescription = m_strHeader + L"Configuration dialog aborted.";
+	}
+
+	catch(bad_alloc e) {}
+}
+
+CThunderError* CHitman2DErrorConfigureExit::Duplicate(void) const
+{
+	return new CHitman2DErrorConfigureExit(m_pszFunctionName);
+}
+
+/*----------------------------------------------------------*\
+| CHitman2DErrorCustom implementation
+\*----------------------------------------------------------*/
+
+CHitman2DErrorCustom::CHitman2DErrorCustom(LPCWSTR pszFunctionName,
+										   LPCWSTR pszCustomMessage):
+										   CThunderError(pszFunctionName),
+										   m_strCustomMessage(pszCustomMessage)
+{
+	try
+	{
+		m_strDescription = pszCustomMessage;
+	}
+
+	catch(bad_alloc e) {}
+}
+
+const CThunderString& CHitman2DErrorCustom::GetCustomMessage(void) const
+{
+	return m_strCustomMessage;
+}
+
+CThunderError* CHitman2DErrorCustom::Duplicate(void) const
+{
+	return new CHitman2DErrorCustom(m_pszFunctionName, m_strCustomMessage);
+}

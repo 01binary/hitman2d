@@ -1,0 +1,7211 @@
+/*------------------------------------------------------------------*\
+|
+| Hitman2DScreens.cpp
+|
+|-------------------------------------------------------------------
+|
+| Content: HiTMAN: 2D screen classes implementation
+| Created: 07/19/2007
+|
+|-------------------------------------------------------------------
+| Copyright © Valeriy Novytskyy
+\*------------------------------------------------------------------*/
+
+/*----------------------------------------------------------*\
+| Includes
+\*----------------------------------------------------------*/
+
+#include "stdafx.h"				// precompiled header
+#include <crtdbg.h>				// using _ASSERT
+#include "Hitman2DGame.h"		// using CHitman2DGame, includes Hitman2DScreens.h
+#include "Hitman2DError.h"		// using error constants
+
+/*----------------------------------------------------------*\
+| Constants
+\*----------------------------------------------------------*/
+
+const WCHAR H2D_SZ_VAR_SCREENFADEINACTIVE[] =				L"fadeinactivealpha";
+const WCHAR H2D_SZ_VAR_SCREENFADEACTIVE[] =					L"fadeactivealpha";
+const WCHAR H2D_SZ_VAR_SCREENFADESTEP[] =					L"fadestepalpha";
+const WCHAR H2D_SZ_VAR_SCREENFADEINTERVAL[] =				L"fadetimerinterval";
+
+const WCHAR H2D_SZ_VAR_SNDSCREENACTIVATE[] =				L"soundactivate";
+const WCHAR H2D_SZ_VAR_SNDSCREENDEACTIVATE[] =				L"sounddeactivate";
+const WCHAR H2D_SZ_VAR_SNDSCREENSTARTDRAG[] =				L"soundstartdrag";
+const WCHAR H2D_SZ_VAR_SNDSCREENENDDRAG[] =					L"soundenddrag";
+const WCHAR H2D_SZ_VAR_SNDSCREENSELECT[] =					L"soundselect";
+const WCHAR H2D_SZ_VAR_SNDSCREENACTION[] =					L"soundaction";
+
+const WCHAR H2D_SZ_SCREEN_FLAGS[] =							L"flags";
+const WCHAR H2D_SZ_SCREEN_STYLE[] =							L"style";
+const WCHAR H2D_SZ_SCREEN_FONT[] =							L"font";
+const WCHAR H2D_SZ_SCREENOVERLAPPED_TABORDER[] =			L"taborder";
+const WCHAR H2D_SZ_SCREENOVERLAPPED_DEFAULTCOMMAND[] =		L"defaultcommand";
+const WCHAR H2D_SZ_SCREENOVERLAPPED_CANCELCOMMAND[] =		L"cancelcommand";
+
+const LPCWSTR H2D_SZ_SCREENFRAME_ELEMENTS[] =			{
+															L"topleft.texture",
+															L"topright.texture",
+															L"bottomleft.texture",
+															L"bottomright.texture",
+															L"top.texture",
+															L"bottom.texture",
+															L"left.texture",
+															L"right.texture",
+															L"center.texture"
+														};
+
+const WCHAR H2D_SZ_SCREENLABEL_TEXT[] =						L"text";
+
+const WCHAR H2D_SZ_SCREENBUTTON_MNEMONIC[] =				L"mnemonic";
+const WCHAR H2D_SZ_SCREENBUTTON_COMMAND[] =					L"command";
+const WCHAR H2D_SZ_SCREENBUTTON_SELECTED[] =				L"selected";
+
+const WCHAR H2D_SZ_SCREENBUTTONEX_CAPTION[] =				L"caption";
+const WCHAR H2D_SZ_SCREENBUTTONEX_DESCRIPTION[] =			L"description";
+const WCHAR H2D_SZ_SCREENBUTTONEX_CAPTIONFONT[] =			L"caption.font";
+const WCHAR H2D_SZ_SCREENBUTTONEX_DESCRIPTIONFONT[] =		L"description.font";
+const WCHAR H2D_SZ_SCREENBUTTONEX_CAPTIONCOLOR[] =			L"caption.color";
+const WCHAR H2D_SZ_SCREENBUTTONEX_DESCRIPTIONCOLOR[] =		L"description.color";
+const WCHAR H2D_SZ_SCREENBUTTONEX_MARGIN[] =				L"margin";
+const WCHAR H2D_SZ_SCREENBUTTONEX_ICON[] =					L"icon.texture";
+const WCHAR H2D_SZ_SCREENBUTTONEX_LEFTCORNER[] =			L"left.texture";
+const WCHAR H2D_SZ_SCREENBUTTONEX_RIGHTCORNER[] =			L"right.texture";
+const WCHAR H2D_SZ_SCREENBUTTONEX_CENTERREPEAT[] =			L"center.texture";
+
+const WCHAR H2D_SZ_SCREENPROGRESSBAR_LEFTCORNER[] =			L"left.texture";
+const WCHAR H2D_SZ_SCREENPROGRESSBAR_RIGHTCORNER[] =		L"right.texture";
+const WCHAR H2D_SZ_SCREENPROGRESSBAR_CENTERREPEAT[] =		L"center.texture";
+const WCHAR H2D_SZ_SCREENPROGRESSBAR_BLIP[] =				L"blip.texture";
+
+const WCHAR H2D_SZ_SCREENSCROLLBAR_MIN[] =					L"min";
+const WCHAR H2D_SZ_SCREENSCROLLBAR_MAX[] =					L"max";
+const WCHAR H2D_SZ_SCREENSCROLLBAR_POS[] =					L"value";
+const WCHAR H2D_SZ_SCREENSCROLLBAR_PAGE[] =					L"page";
+
+const WCHAR H2D_SZ_SCREENSCROLLBAR_WAITARROWAUTOSCROLL[] =	L"waitarrowautoscroll";
+const WCHAR H2D_SZ_SCREENSCROLLBAR_ARROWAUTOSCROLLINT[] =	L"arrowautoscrollinterval";
+const WCHAR H2D_SZ_SCREENSCROLLBAR_WAITSHAFTAUTOSCROLL[] =	L"waitshaftautoscroll";
+const WCHAR H2D_SZ_SCREENSCROLLBAR_SHAFTAUTOSCROLLINT[] =	L"shaftautoscrollinterval";
+
+const LPCWSTR H2D_SZ_SCREENSCROLLBAR_ELEM_STATES[] =	{
+															L"normal",
+															L"hover",
+															L"pushed",
+															L"disabled"
+														};
+
+const LPCWSTR H2D_SZ_SCREENSCROLLBAR_ELEMS_HORZ[] =		{
+															L"leftarrow",
+															L"rightarrow",
+															L"shaftleft",
+															L"shaftcenter",
+															L"shaftright",
+															L"thumbleft",
+															L"thumbcenter",
+															L"thumbright"
+														};
+
+const LPCWSTR H2D_SZ_SCREENSCROLLBAR_ELEMS_VERT[] =		{
+															L"uparrow",
+															L"downarrow",
+															L"shafttop",
+															L"shaftcenter",
+															L"shaftbottom",
+															L"thumbtop",
+															L"thumbcenter",
+															L"thumbbottom"
+														};
+
+const WCHAR H2D_SZ_SCREENFPS_EXTENDED_FONT[] =				L"extendedfont";
+const WCHAR H2D_SZ_SCREENFPS_EXTENDED_BACKGROUND[] =		L"extendedbackground.texture";
+
+const WCHAR H2D_SZ_SCREENCONSOLE_PROMPTTEXTURE[] =			L"prompt.texture";
+const WCHAR H2D_SZ_SCREENCONSOLE_CARETTEXTURE[] =			L"caret.texture";
+const WCHAR H2D_SZ_SCREENCONSOLE_BORDERTEXTURE[] =			L"border.texture";
+const WCHAR H2D_SZ_SCREENCONSOLE_PROMPTFLASH[] =			L"prompt.flash";
+const WCHAR H2D_SZ_SCREENCONSOLE_HISTORYLINES[] =			L"historylines";
+
+const WCHAR H2D_SZ_SCREENCREDITS_CREDITSPATH[] =			L"credits.path";
+const WCHAR H2D_SZ_SCREENCREDITS_SCROLLINTERVAL[] =			L"credits.scrollinterval";
+const WCHAR H2D_SZ_SCREENCREDITS_SCROLLDISTANCE[] =			L"credits.scrolldistance";
+
+const WCHAR H2D_SZ_SCREENPAUSE_VERTICALSPACING[] =			L"verticalspacing";
+const WCHAR H2D_SZ_SCREENPAUSE_HORIZONTALSPACING[] =		L"horizontalspacing";
+
+const WCHAR H2D_SZ_SCREENSTART_OVERLAY[] =					L"overlay.texture";
+
+const LPCWSTR H2D_SZ_SCREENFRAME_FLAGS[] =		{
+															L"H2D_SCREENFRAME_AUTOSIZE"
+												};
+
+const DWORD H2D_DW_SCREENFRAME_FLAGS[] =		{
+															THU_SCREEN_USERFLAG << 0
+												};
+
+const LPCWSTR H2D_SZ_SCREENOVERLAPPED_FLAGS[] =	{
+															L"H2D_SCREENOVERLAPPED_FADEEFFECTS",
+															L"H2D_SCREENOVERLAPPED_DRAGGABLE",
+															L"H2D_SCREENOVERLAPPED_NOFOCUSCHILDREN",
+															L"H2D_SCREENOVERLAPPED_NOFOREGROUND"
+												};
+
+const DWORD H2D_DW_SCREENOVERLAPPED_FLAGS[] =	{
+															H2D_SCREENOVERLAPPED_FADEEFFECTS,
+															H2D_SCREENOVERLAPPED_DRAGGABLE,
+															H2D_SCREENOVERLAPPED_NOFOCUSCHILDREN,
+															H2D_SCREENOVERLAPPED_NOFOREGROUND
+												};
+
+const LPCWSTR H2D_SZ_SCREENLABEL_FLAGS[] =		{
+															L"H2D_SCREENLABEL_TEXT_BOTTOM",
+															L"H2D_SCREENLABEL_TEXT_CENTER",
+															L"H2D_SCREENLABEL_TEXT_LEFT",
+															L"H2D_SCREENLABEL_TEXT_RIGHT",
+															L"H2D_SCREENLABEL_TEXT_SINGLELINE",
+															L"H2D_SCREENLABEL_TEXT_TOP",
+															L"H2D_SCREENLABEL_TEXT_VCENTER",
+															L"H2D_SCREENLABEL_TEXT_WORDBREAK"
+												};
+
+const DWORD H2D_DW_SCREENLABEL_FLAGS[] =		{
+															H2D_SCREENLABEL_TEXT_BOTTOM,
+															H2D_SCREENLABEL_TEXT_CENTER,
+															H2D_SCREENLABEL_TEXT_LEFT,
+															H2D_SCREENLABEL_TEXT_RIGHT,
+															H2D_SCREENLABEL_TEXT_SINGLELINE,
+															H2D_SCREENLABEL_TEXT_TOP,
+															H2D_SCREENLABEL_TEXT_VCENTER,
+															H2D_SCREENLABEL_TEXT_WORDBREAK
+												};
+
+const LPCWSTR H2D_SZ_SCREENBUTTON_FLAGS[] =		{
+															L"H2D_SCREENBUTTON_NOTIFYSTATE",
+															L"H2D_SCREENBUTTON_TOGGLE",
+															L"H2D_SCREENBUTTON_RADIO"
+												};
+
+const DWORD H2D_DW_SCREENBUTTON_FLAGS[] =		{
+															H2D_SCREENBUTTON_NOTIFYSTATE,
+															H2D_SCREENBUTTON_TOGGLE,
+															H2D_SCREENBUTTON_RADIO
+												};
+
+const LPCWSTR H2D_SZ_SCREENBUTTON_STATETEX[] =	{
+															L"normal.texture",
+															L"hover.texture",
+															L"pushed.texture",
+															L"disabled.texture",
+															L"normaltoggled.texture",
+															L"hovertoggled.texture",
+															L"pushedtoggled.texture",
+															L"disabledtoggled.texture"
+												};
+
+const LPCWSTR H2D_SZ_SCREENBUTTON_STATEBLEND[] ={
+															L"normal.blend",
+															L"hover.blend",
+															L"pushed.blend",
+															L"disabled.blend",
+															L"normaltoggled.blend",
+															L"hovertoggled.blend",
+															L"pushedtoggled.blend",
+															L"disabledtoggled.blend"
+												};
+
+const LPCWSTR H2D_SZ_SCREENSCROLLBAR_FLAGS[] =	{
+															L"H2D_SCREENSCROLLBAR_HORIZONTAL",
+															L"H2D_SCREENSCROLLBAR_VERTICAL"
+												};
+
+const DWORD H2D_DW_SCREENSCROLLBAR_FLAGS[] =	{
+															H2D_SCREENSCROLLBAR_HORIZONTAL,
+															H2D_SCREENSCROLLBAR_VERTICAL
+												};
+
+const LPCWSTR H2D_SZ_PROGRESS_TYPES[] =			{
+															L"loading",
+															L"saving"
+											   };
+
+	const LPCWSTR H2D_SZ_PROGRESS_SUBTYPES[] = {
+															L"session",
+															L"session header",
+															L"session maps",
+															L"map",
+															L"map header",
+															L"map instance",
+															L"map texture sheets",
+															L"map animations",
+															L"map sounds",
+															L"map music",
+															L"map tiles",
+															L"map actors",
+															L"map user data"
+												};
+
+const D3DCOLOR H2D_SCREENCONSOLE_COLORS[] =		{
+															D3DCOLOR_XRGB(255, 255, 255),	// Message
+															D3DCOLOR_XRGB(192, 192, 192),	// Echo
+															D3DCOLOR_XRGB(255, 255, 128),	// Error
+															D3DCOLOR_XRGB(255, 164, 255),	// Warning
+															D3DCOLOR_XRGB(115, 169, 255),	// Info
+															D3DCOLOR_ARGB(90, 255, 255, 255)// Debug
+												};
+
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenOverlapped implementation
+\*----------------------------------------------------------*/
+
+CHitman2DScreenOverlapped::CHitman2DScreenOverlapped(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent):
+													 CThunderScreen(rEngine, pszClass, pParent),
+													 m_pFadeTimer(NULL),
+													 m_nScreenFadeInactive(200),
+													 m_nScreenFadeActive(255),
+													 m_nScreenFadeStep(9),
+													 m_fScreenFadeInterval(0.01f),
+													 m_nFadeAlpha(255),
+													 m_nFadeAction(FADE_ACTION_NONE),
+													 m_nFadeState(FADE_STATE_OPENING),
+													 m_nDragState(DRAG_STATE_NONE),
+													 m_nDefaultCmdID(-1),
+													 m_nCancelCmdID(-1),
+													 m_pFont(NULL),
+													 m_pLastFocus(NULL)
+{
+	m_ptDragOffset.x = 0;
+	m_ptDragOffset.y = 0;
+
+	const CThunderTheme& rTheme = rEngine.GetScreensConst().GetTheme();
+
+	const CThunderVariable* pVar = rTheme.GetVariable(H2D_SZ_VAR_SCREENFADEACTIVE);
+
+	if(pVar != NULL && pVar->GetVarType() == THU_VAR_INT)
+		m_nScreenFadeActive = pVar->GetIntValue();
+
+	pVar = rTheme.GetVariable(H2D_SZ_VAR_SCREENFADEINACTIVE);
+
+	if(pVar != NULL && pVar->GetVarType() == THU_VAR_INT)
+		m_nScreenFadeInactive = pVar->GetIntValue();
+
+	pVar = rTheme.GetVariable(H2D_SZ_VAR_SCREENFADESTEP);
+
+	if(pVar != NULL && pVar->GetVarType() == THU_VAR_INT)
+		m_nScreenFadeStep = pVar->GetIntValue();
+
+	pVar = rTheme.GetVariable(H2D_SZ_VAR_SCREENFADEINTERVAL);
+
+	if(pVar != NULL && pVar->GetVarType() == THU_VAR_FLOAT)
+		m_fScreenFadeInterval = pVar->GetFloatValue();
+}
+
+CHitman2DScreenOverlapped::~CHitman2DScreenOverlapped(void)
+{
+}
+
+CHitman2DScreenOverlapped* CHitman2DScreenOverlapped::CreateInstance(CThunderEngine& rEngine,
+																	 LPCWSTR pszClass,
+																	 CThunderScreen* pParent)
+{
+	return new CHitman2DScreenOverlapped(rEngine, pszClass, pParent);
+}
+
+CThunderFont* CHitman2DScreenOverlapped::GetFont(void)
+{
+	return m_pFont;
+}
+
+void CHitman2DScreenOverlapped::SetFont(CThunderFont* pFont)
+{
+	if(m_pFont != NULL)
+		m_pFont->Release();
+
+	m_pFont = pFont;
+
+	pFont->AddRef();
+}
+
+void CHitman2DScreenOverlapped::SetMnemonic(CThunderScreen* pScreen, int nMnemonic)
+{
+	m_mapMnemonics[nMnemonic] = pScreen;
+}
+
+void CHitman2DScreenOverlapped::Tab(bool bNext)
+{
+	if(m_lstTabOrder.size() == 0) return;
+	
+	// Find currently focused control in tab order
+
+	for(list<CThunderScreen*>::iterator pos = m_lstTabOrder.begin();
+		pos != m_lstTabOrder.end();
+		pos++)
+	{
+		if(*pos == m_rEngine.GetScreens().GetFocusScreen())
+		{
+			if(true == bNext)
+			{
+				// Set focus to the next control in tab order
+
+				pos++;
+
+				// Wrap if required
+
+				if(pos == m_lstTabOrder.end())
+					pos = m_lstTabOrder.begin();
+			}
+			else
+			{
+				// Set focus to the previous control in tab order
+
+				if(pos == m_lstTabOrder.begin())
+				{
+					// Wrap if required
+
+					pos = --m_lstTabOrder.end();
+				}
+				else
+				{
+					pos--;
+				}
+			}
+
+			m_rEngine.GetScreens().SetFocusScreen(*pos);
+
+			return;
+		}
+	}
+}
+
+void CHitman2DScreenOverlapped::Close(void)
+{
+	m_nFadeState = FADE_STATE_CLOSING;
+
+	Deactivate();
+}
+
+int CHitman2DScreenOverlapped::OnNotify(int nNotifyID,
+										CThunderScreen* pSender,
+										int nParam)
+{
+	switch(nNotifyID)
+	{
+	case H2D_SCREENBUTTON_NOTIFY_SELECT:
+	case H2D_SCREENBUTTON_NOTIFY_ACTION:
+		{
+			if(0 == nParam) return false;
+
+			const CThunderVariable* pVar =
+				m_rEngine.GetScreensConst().GetTheme().GetVariable(nNotifyID == H2D_SCREENBUTTON_NOTIFY_SELECT ?
+																	H2D_SZ_VAR_SNDSCREENSELECT :
+																	H2D_SZ_VAR_SNDSCREENACTION);
+
+			if(NULL == pVar || pVar->GetVarType() != THU_VAR_STRING)
+				return false;
+
+			CThunderSound* pSound =
+				m_rEngine.GetSounds().Load(pVar->GetStringValue());
+
+			if(NULL == pSound)
+			{
+				CHitman2DGame::PrintLastError(m_rEngine);
+				return false;
+			}
+
+			try
+			{
+				CThunderSoundInstance* pSoundInstance = pSound->Play(false);
+
+				CHitman2DGame* pGame =
+					dynamic_cast<CHitman2DGame*>(m_rEngine.GetGameInstance());
+
+				if(pGame != NULL)
+					pSoundInstance->SetVolume(pGame->GetEffectsVolume());
+			}
+
+			catch(CThunderError& rError)
+			{
+				UNREFERENCED_PARAMETER(rError);
+
+				CHitman2DGame::PrintLastError(m_rEngine);
+				return false;
+			}
+		}
+		break;
+	}
+
+	return true;
+}
+
+DWORD CHitman2DScreenOverlapped::GetMemoryFootprint(void) const
+{
+	return sizeof(CHitman2DScreenOverlapped) - sizeof(CThunderScreen) * 2 +
+		CThunderScreen::GetMemoryFootprint();
+}
+
+void CHitman2DScreenOverlapped::OnBeginDrag(void)
+{
+	const CThunderVariable* pVar =
+		m_rEngine.GetScreensConst().GetTheme().GetVariable(H2D_SZ_VAR_SNDSCREENSTARTDRAG);
+
+	if(pVar != NULL && pVar->GetVarType() == THU_VAR_STRING)
+	{
+		CThunderSound* pSnd = m_rEngine.GetSounds().Load(pVar->GetStringValue());
+
+		if(pSnd != NULL)
+		{
+			CHitman2DGame* pGame =
+				dynamic_cast<CHitman2DGame*>(m_rEngine.GetGameInstance());
+
+			if(NULL == pGame) return;
+
+			pSnd->Play()->SetVolume(pGame->GetEffectsVolume());
+		}
+		else
+		{
+			CHitman2DGame::PrintLastError(m_rEngine);
+		}
+	}
+}
+
+void CHitman2DScreenOverlapped::OnEndDrag(void)
+{
+	const CThunderVariable* pVar =
+		m_rEngine.GetScreensConst().GetTheme().GetVariable(H2D_SZ_VAR_SNDSCREENENDDRAG);
+
+	if(pVar != NULL && pVar->GetVarType() == THU_VAR_STRING)
+	{
+		CThunderSound* pSnd = m_rEngine.GetSounds().Load(pVar->GetStringValue());
+
+		if(pSnd != NULL)
+		{
+			CHitman2DGame* pGame =
+				dynamic_cast<CHitman2DGame*>(m_rEngine.GetGameInstance());
+
+			if(NULL == pGame) return;
+
+			pSnd->Play()->SetVolume(pGame->GetEffectsVolume());
+		}
+		else
+		{
+			CHitman2DGame::PrintLastError(m_rEngine);
+		}
+	}
+}
+
+void CHitman2DScreenOverlapped::OnBeginFade(void)
+{
+	// Default handler
+}
+
+void CHitman2DScreenOverlapped::OnEndFade(void)
+{
+	// Default handler
+}
+
+void CHitman2DScreenOverlapped::OnActivate(CThunderScreen* pOldActive)
+{
+	// Set as foreground
+
+	if(IsFlagSet(H2D_SCREENOVERLAPPED_NOFOREGROUND) == false)
+		m_rEngine.GetScreens().SetForegroundScreen(this);
+
+	// If focused screen is not this one and not a child of this one
+
+	if(m_rEngine.GetScreensConst().GetFocusScreen() != NULL &&
+	   m_rEngine.GetScreensConst().GetFocusScreen() != this)
+	{
+		CThunderScreen* pParent =
+			m_rEngine.GetScreensConst().GetFocusScreen()->GetParent();
+
+		if(pParent != NULL)
+		{
+			while(pParent->GetParent() != NULL)
+				pParent = pParent->GetParent();
+
+			// Set focus
+
+			if(pParent != this)
+				m_rEngine.GetScreens().SetFocusScreen(this);
+		}
+	}
+
+	// If capture screen is not this one and not a child of this one
+
+	if(m_rEngine.GetScreensConst().GetCaptureScreen() != NULL &&
+	   m_rEngine.GetScreensConst().GetCaptureScreen() != this)
+	{
+		CThunderScreen* pParent = m_rEngine.GetScreensConst().GetCaptureScreen()->GetParent();
+
+		if(pParent != NULL)
+		{
+			while(pParent->GetParent() != NULL)
+				pParent = pParent->GetParent();
+
+			// Reset capture
+
+			if(pParent != this)
+				m_rEngine.GetScreens().SetCaptureScreen(NULL);
+		}
+	}
+
+	// Start fading in
+
+	if(IsFlagSet(H2D_SCREENOVERLAPPED_FADEEFFECTS) == true)
+	{
+		m_nFadeAction = FADE_ACTION_IN;
+
+		if(NULL == m_pFadeTimer)
+		{
+			m_pFadeTimer = m_rEngine.GetTimers().Add(this,
+													 m_fScreenFadeInterval,
+													 TIMER_FADE);
+
+			m_nFadeAlpha = (m_nFadeState == FADE_STATE_OPENING) ?
+							0 : m_nScreenFadeInactive;
+
+			OnBeginFade();
+		}
+	}
+	else
+	{
+		m_nFadeAction = FADE_ACTION_IN;
+		
+		OnBeginFade();
+		OnEndFade();
+	}
+
+	if(FADE_STATE_OPENING == m_nFadeState)
+		m_nFadeState = FADE_STATE_NONE;
+
+	// Play activation sound
+
+	if(NULL == pOldActive)
+	{
+		const CThunderVariable* pVar =
+			m_rEngine.GetScreensConst().GetTheme().GetVariable(H2D_SZ_VAR_SNDSCREENSELECT);
+
+		if(pVar != NULL && pVar->GetVarType() == THU_VAR_STRING)
+		{
+			try
+			{
+				CThunderSound* pSnd =
+					m_rEngine.GetSounds().Load(pVar->GetStringValue());
+
+				CHitman2DGame* pGame =
+					dynamic_cast<CHitman2DGame*>(m_rEngine.GetGameInstance());
+
+				if(NULL == pGame) return;
+
+				pSnd->Play()->SetVolume(pGame->GetEffectsVolume());
+			}
+
+			catch(CThunderError& rError)
+			{
+				UNREFERENCED_PARAMETER(rError);
+
+				CHitman2DGame::PrintLastError(m_rEngine);
+			}
+		}
+	}
+}
+
+void CHitman2DScreenOverlapped::OnDeactivate(CThunderScreen* pNewActive)
+{
+	// Play deactivation sound
+
+	if(NULL == pNewActive)
+	{
+		const CThunderVariable* pVar =
+			m_rEngine.GetScreensConst().GetTheme().GetVariable(H2D_SZ_VAR_SNDSCREENDEACTIVATE);
+
+		if(pVar != NULL && pVar->GetVarType() == THU_VAR_STRING)
+		{
+			try
+			{
+				CThunderSound* pSnd =
+					m_rEngine.GetSounds().Load(pVar->GetStringValue());
+
+				CHitman2DGame* pGame =
+					dynamic_cast<CHitman2DGame*>(m_rEngine.GetGameInstance());
+
+				if(NULL == pGame) return;
+
+				pSnd->Play()->SetVolume(pGame->GetEffectsVolume());
+			}
+
+			catch(CThunderError& rError)
+			{
+				UNREFERENCED_PARAMETER(rError);
+
+				CHitman2DGame::PrintLastError(m_rEngine);
+			}
+		}
+	}
+
+	// Start fading out
+
+	m_nFadeAction = FADE_ACTION_OUT;
+
+	if(IsFlagSet(H2D_SCREENOVERLAPPED_FADEEFFECTS) == true)
+	{
+		CHitman2DGame* pGame =
+			dynamic_cast<CHitman2DGame*>(m_rEngine.GetGameInstance());
+
+		if(NULL == pGame) return;		
+
+		if(NULL == m_pFadeTimer)
+		{
+			m_pFadeTimer = m_rEngine.GetTimers().Add(this,
+													 m_fScreenFadeInterval,
+													 TIMER_FADE);
+
+			OnBeginFade();
+		}
+	}
+	else if(FADE_STATE_CLOSING == m_nFadeState)
+	{
+		// Close immediately
+
+		OnBeginFade();
+		OnEndFade();
+
+		Release();
+
+		return;
+	}
+
+	// If currently focused screen is an eventual child of this screen,
+	// save it as a last focused screen so that we can set focus on it when
+	// this screen is focused once again
+
+	CThunderScreen* pFocusScreen = m_rEngine.GetScreensConst().GetFocusScreen();
+
+	if(pFocusScreen != NULL && pFocusScreen != this)
+	{
+		CThunderScreen* pFocusParent = pFocusScreen->GetParent();
+
+		if(pFocusParent != NULL)
+		{
+			while(pFocusParent->GetParent() != NULL)
+				pFocusParent = pFocusParent->GetParent();
+
+			if(this == pFocusParent)
+				m_pLastFocus = pFocusScreen;
+		}
+	}
+}
+
+void CHitman2DScreenOverlapped::OnFocus(CThunderScreen* pOldFocus)
+{
+	if(m_pLastFocus != NULL)
+	{
+		// If there was a focused child, focus that child
+
+		m_rEngine.GetScreens().SetFocusScreen(m_pLastFocus);
+
+		m_pLastFocus = NULL;
+	}
+	else
+	{
+		// Otherwise, set focus to the first control in tab order
+
+		if(m_lstTabOrder.empty() == true ||
+			IsFlagSet(H2D_SCREENOVERLAPPED_NOFOCUSCHILDREN)) return;
+
+		if(m_lstTabOrder.front() != NULL)
+			m_rEngine.GetScreens().SetFocusScreen(m_lstTabOrder.front());
+	}
+}
+
+void CHitman2DScreenOverlapped::OnTimer(CThunderTimer& rTimer)
+{
+	if(rTimer.GetID() == TIMER_FADE)
+	{
+		CHitman2DGame* pGame =
+			dynamic_cast<CHitman2DGame*>(m_rEngine.GetGameInstance());
+
+		if(NULL == pGame) return;
+
+		// Fade in or fade out
+
+		if(FADE_ACTION_IN == m_nFadeAction)
+		{
+			m_nFadeAlpha += m_nScreenFadeStep;
+
+			if(m_nFadeAlpha > m_nScreenFadeActive)
+			{
+				m_rEngine.GetTimers().Remove(this, TIMER_FADE);
+				m_pFadeTimer = NULL;
+
+				OnEndFade();
+
+				m_nFadeAction = FADE_ACTION_NONE;
+
+				m_nFadeAlpha = m_nScreenFadeActive;
+			}
+
+			// Set alpha
+
+			m_clrBlend.SetA(m_nFadeAlpha);
+		}
+		else if(FADE_ACTION_OUT == m_nFadeAction)
+		{
+			m_nFadeAlpha -= m_nScreenFadeStep;
+
+			if(m_nFadeAlpha <=
+			  (FADE_STATE_CLOSING == m_nFadeState ? 0 : m_nScreenFadeInactive))
+			{
+				m_rEngine.GetTimers().Remove(this, TIMER_FADE);
+				m_pFadeTimer = NULL;
+
+				OnEndFade();
+
+				m_nFadeAction = FADE_ACTION_NONE;
+
+				m_nFadeAlpha = (FADE_STATE_CLOSING == m_nFadeState ?
+								0 : m_nScreenFadeInactive);
+
+				if(FADE_STATE_CLOSING == m_nFadeState)
+				{
+					Release();
+					return;
+				}
+			}
+
+			// Set alpha
+
+			m_clrBlend.SetA(m_nFadeAlpha);
+		}
+	}
+}
+
+void CHitman2DScreenOverlapped::OnKeyDown(int nKeyCode)
+{
+	switch(nKeyCode)
+	{
+	case VK_TAB:
+		{
+			Tab(!m_rEngine.GetKeyState(VK_SHIFT));
+		}
+		break;
+	case VK_UP:
+	case VK_LEFT:
+		{
+			Tab(false);
+		}
+		break;
+	case VK_DOWN:
+	case VK_RIGHT:
+		{
+			Tab(true);
+		}
+		break;
+	case VK_RETURN:
+		{
+			// Default command
+
+			CHitman2DScreenButton* pButton =
+				dynamic_cast<CHitman2DScreenButton*>(GetChildren().FindByID(m_nDefaultCmdID));
+
+			if(pButton != NULL) pButton->OnAction();
+		}
+		break;
+	case VK_ESCAPE:
+		{
+			// Cancel command
+
+			CHitman2DScreenButton* pButton =
+				dynamic_cast<CHitman2DScreenButton*>(GetChildren().FindByID(m_nCancelCmdID));
+
+			if(pButton != NULL) pButton->OnAction();
+		}
+		break;
+	default:
+		{
+			// Mnemonic
+
+			if(m_mapMnemonics.find(nKeyCode) != m_mapMnemonics.end())
+			{
+				CThunderScreen* pMnemonicOwner =
+					GetChildren().FindByID(m_mapMnemonics[nKeyCode]->GetID());
+
+				CHitman2DScreenButton* pButton =
+					dynamic_cast<CHitman2DScreenButton*>(pMnemonicOwner);
+
+				if(pButton != NULL)
+				{
+					// If screen is a button, fire its command event
+
+					pButton->OnAction();
+				}
+				else
+				{
+					// If not a button, set focus
+
+					m_rEngine.GetScreens().SetFocusScreen(pMnemonicOwner);
+				}
+			}
+		}
+		break;
+	}
+}
+
+void CHitman2DScreenOverlapped::OnMouseMove(POINT pt)
+{
+	if(m_nDragState != DRAG_STATE_NONE)
+	{
+		// Fire OnBeginDrag
+
+		if(DRAG_STATE_WAITING == m_nDragState)
+		{
+			m_nDragState = DRAG_STATE_DRAGGING;
+
+			OnBeginDrag();
+		}
+
+		// Move screen with mouse
+
+		SetPosition(m_ptPos.x + (pt.x - m_ptDragOffset.x),
+			        m_ptPos.y + (pt.y - m_ptDragOffset.y));
+	}
+}
+
+void CHitman2DScreenOverlapped::OnMouseLDown(POINT pt)
+{
+	// Accept mouse only in client area
+	// If this screen is modal, this event will be fired even if mouse is outside
+
+	if(pt.x < 0 || pt.y < 0 || pt.x > GetSize().cx || pt.y > GetSize().cy)
+		return;
+
+	if(IsFlagSet(THU_SCREEN_NOACTIVATE) == false)
+		Activate();
+
+	// Start dragging
+
+	if(IsFlagSet(H2D_SCREENOVERLAPPED_DRAGGABLE) == true)
+	{
+		m_ptDragOffset.x = pt.x;
+		m_ptDragOffset.y = pt.y;
+
+		m_nDragState = DRAG_STATE_WAITING;
+
+		// Capture
+
+		m_rEngine.GetScreens().SetCaptureScreen(this);
+	}
+}
+
+void CHitman2DScreenOverlapped::OnMouseLUp(POINT pt)
+{
+	if(m_nDragState != DRAG_STATE_NONE)
+	{
+		m_nDragState = DRAG_STATE_NONE;
+
+		m_rEngine.GetScreens().SetCaptureScreen(NULL);
+	}
+}
+
+void CHitman2DScreenOverlapped::Deserialize(const CThunderMLElem& rRoot)
+{
+	CThunderScreen::Deserialize(rRoot);
+
+	// Read overlapped flags
+
+	const CThunderMLElem* pElem = rRoot.FindChildConst(H2D_SZ_SCREEN_FLAGS);
+
+	if(pElem != NULL)
+	{
+		m_dwFlags |= DeserializeFlags(*pElem,
+									  H2D_SZ_SCREENOVERLAPPED_FLAGS,
+									  H2D_DW_SCREENOVERLAPPED_FLAGS,
+									  sizeof(H2D_DW_SCREENOVERLAPPED_FLAGS)
+										/ sizeof(DWORD));
+	}
+
+	// Read font (optional)
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREEN_FONT, THU_MLELEM_VALUELIST);
+
+	if(pElem != NULL)
+	{
+		try
+		{
+			m_pFont = m_rEngine.GetFonts().LoadInstance(*pElem);
+			m_pFont->AddRef();
+		}
+		
+		catch(CThunderError& rError)
+		{
+			UNREFERENCED_PARAMETER(rError);
+
+			throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidPtr(__FUNCTIONW__, L"m_pFont"));
+		}		
+	}
+	else if(m_pStyle != NULL)
+	{
+		m_pFont = m_pStyle->GetFont(H2D_SZ_SCREEN_FONT);
+
+		if(NULL == m_pFont)
+			throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidThemeStyleElement(__FUNCTIONW__, m_strStyle, H2D_SZ_SCREEN_FONT));
+
+		m_pFont->AddRef();
+	}
+
+	// Read tab order (optional)
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENOVERLAPPED_TABORDER);
+
+	if(pElem != NULL)
+	{
+		CThunderScreen* pScreen = NULL;
+
+		for(CThunderMLElemConstIterator pos = pElem->GetFirstChildPosConst();
+			pos != pElem->GetLastChildPosConst();
+			pos++)
+		{
+			if((*pos)->GetVarType() == THU_VAR_STRING)
+			{
+				// Read tab item as screen name
+
+				pScreen = m_lstChildren.FindByName((*pos)->GetStringValue());
+			}
+			else if((*pos)->GetVarType() == THU_VAR_INT)
+			{
+				// Read tab item as screen id
+
+				pScreen = m_lstChildren.FindByID((*pos)->GetIntValue());
+			}
+
+			if(NULL == pScreen)
+				throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidPtr(__FUNCTIONW__, L"pScreen"));
+
+			m_lstTabOrder.push_back(pScreen);
+		}
+	}
+
+	// Read default command (optional)
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENOVERLAPPED_DEFAULTCOMMAND,
+								 THU_MLELEM_VALUE,
+								 THU_VAR_INT);
+
+	if(pElem != NULL) m_nDefaultCmdID = pElem->GetIntValue();
+
+	// Read cancel command (optional)
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENOVERLAPPED_CANCELCOMMAND,
+								 THU_MLELEM_VALUE,
+								 THU_VAR_INT);
+
+	if(pElem != NULL) m_nCancelCmdID = pElem->GetIntValue();
+}
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenImage implementation
+\*----------------------------------------------------------*/
+
+CHitman2DScreenImage::CHitman2DScreenImage(CThunderEngine& rEngine,
+										   LPCWSTR pszClass,
+										   CThunderScreen* pParent):
+
+										   CThunderScreen(rEngine, pszClass, pParent)
+{
+}
+
+CHitman2DScreenImage::~CHitman2DScreenImage(void)
+{
+}
+
+CHitman2DScreenImage* CHitman2DScreenImage::CreateInstance(CThunderEngine& rEngine,
+														   LPCWSTR pszClass,
+														   CThunderScreen* pParent)
+{
+	return new CHitman2DScreenImage(rEngine, pszClass, pParent);
+}
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenLabel implementation
+\*----------------------------------------------------------*/
+
+CHitman2DScreenLabel::CHitman2DScreenLabel(CThunderEngine& rEngine,
+										   LPCWSTR pszClass,
+										   CThunderScreen* pParent):
+										   CThunderScreen(rEngine, pszClass, pParent),
+										   m_dwTextFlags(0),
+										   m_pFont(NULL)
+{
+}
+
+CHitman2DScreenLabel::~CHitman2DScreenLabel(void)
+{
+}
+
+CHitman2DScreenLabel* CHitman2DScreenLabel::CreateInstance(CThunderEngine& rEngine,
+														   LPCWSTR pszClass,
+														   CThunderScreen* pParent)
+{
+	return new CHitman2DScreenLabel(rEngine, pszClass, pParent);
+}
+
+const CThunderString& CHitman2DScreenLabel::GetText(void) const
+{
+	return m_strText;
+}
+
+void CHitman2DScreenLabel::SetText(LPCWSTR pszText)
+{
+	m_strText = pszText;
+}
+
+void CHitman2DScreenLabel::OnRender(LPCRECT prc)
+{
+	// Render the text
+
+	if(m_pFont != NULL)
+	{
+		HRESULT hr = m_pFont->GetD3DXFont()->DrawTextW(m_rEngine.GetGraphics().GetD3DXSprite(),
+													   m_strText,
+													   m_strText.GetLength(),
+													   &m_rcCachedRect,
+													   m_dwTextFlags,
+													   GetFrontBufferBlend());
+
+		if(FAILED(hr))
+			throw m_rEngine.GetErrors().Push(new CThunderErrorD3DXSpriteDraw(__FUNCTIONW__, hr));
+	}
+}
+
+void CHitman2DScreenLabel::Deserialize(const CThunderMLElem& rRoot)
+{
+	CThunderScreen::Deserialize(rRoot);
+
+	// Read label flags
+
+	const CThunderMLElem* pElem = rRoot.FindChildConst(H2D_SZ_SCREEN_FLAGS);
+
+	if(pElem != NULL)
+	{
+		m_dwFlags |= DeserializeFlags(*pElem,
+									  H2D_SZ_SCREENLABEL_FLAGS,
+									  H2D_DW_SCREENLABEL_FLAGS,
+									  sizeof(H2D_DW_SCREENLABEL_FLAGS) /
+										sizeof(DWORD));
+	}
+
+	// Calculate text flags from screen flags
+
+	if(m_dwFlags & H2D_SCREENLABEL_TEXT_BOTTOM)
+		m_dwTextFlags |= DT_BOTTOM;
+	else if(m_dwFlags & H2D_SCREENLABEL_TEXT_TOP)
+		m_dwTextFlags |= DT_TOP;
+	else if(m_dwFlags & H2D_SCREENLABEL_TEXT_VCENTER)
+		m_dwTextFlags |= DT_VCENTER;
+
+	if(m_dwFlags & H2D_SCREENLABEL_TEXT_CENTER)
+		m_dwTextFlags |= DT_CENTER;
+	else if(m_dwFlags & H2D_SCREENLABEL_TEXT_LEFT)
+		m_dwTextFlags |= DT_LEFT;
+	else if(m_dwFlags & H2D_SCREENLABEL_TEXT_RIGHT)
+		m_dwTextFlags |= DT_RIGHT;
+
+	if(m_dwFlags & H2D_SCREENLABEL_TEXT_SINGLELINE)
+		m_dwTextFlags |= DT_SINGLELINE;	
+	
+	if(m_dwFlags & H2D_SCREENLABEL_TEXT_WORDBREAK)
+		m_dwTextFlags |= DT_WORDBREAK;
+
+	// Read font (required)
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREEN_FONT, THU_MLELEM_VALUELIST);
+
+	if(pElem != NULL)
+	{
+		try
+		{
+			m_pFont = m_rEngine.GetFonts().LoadInstance(*pElem);
+			m_pFont->AddRef();
+		}
+
+		catch(CThunderError& rError)
+		{
+			UNREFERENCED_PARAMETER(rError);
+
+			throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidPtr(__FUNCTIONW__, L"m_pFont"));
+		}
+	}
+	else if(m_pStyle != NULL)
+	{
+		m_pFont = m_pStyle->GetFont(H2D_SZ_SCREEN_FONT);
+
+		if(NULL == m_pFont)
+			throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidThemeStyleElement(__FUNCTIONW__, m_strStyle, H2D_SZ_SCREEN_FONT));
+	}
+	else
+	{
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileElement(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath(), H2D_SZ_SCREEN_FONT));
+	}
+
+	// Read text
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENLABEL_TEXT,
+								 THU_MLELEM_VALUE,
+								 THU_VAR_STRING);
+
+	if(pElem != NULL) m_strText = pElem->GetStringValue();
+}
+
+DWORD CHitman2DScreenLabel::GetMemoryFootprint(void) const
+{
+	return sizeof(CHitman2DScreenLabel) - sizeof(CThunderScreen) * 2 +
+		CThunderScreen::GetMemoryFootprint();
+}
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenButton implementation
+\*----------------------------------------------------------*/
+
+CHitman2DScreenButton::CHitman2DScreenButton(CThunderEngine& rEngine,
+											 LPCWSTR pszClass,
+											 CThunderScreen* pParent):
+
+											 CThunderScreen(rEngine, pszClass, pParent),
+											 m_nState(H2D_SCREENBUTTON_STATE_NORMAL),
+											 m_bPushed(false),
+											 m_bHover(false),
+											 m_bToggle(false),
+											 m_bNoStateTextures(true),
+											 m_bNoStateBlends(true)
+{
+	for(int n = 0; n < H2D_SCREENBUTTON_STATE_COUNT; n++)
+		m_clrStateBlends[n] = 0xFFFFFFFF;
+}
+
+CHitman2DScreenButton::~CHitman2DScreenButton(void)
+{
+}
+
+CHitman2DScreenButton* CHitman2DScreenButton::CreateInstance(CThunderEngine& rEngine,
+															 LPCWSTR pszClass,
+															 CThunderScreen* pParent)
+{
+	return new CHitman2DScreenButton(rEngine, pszClass, pParent);
+}
+
+H2D_SCREENBUTTON_STATES CHitman2DScreenButton::GetState(void) const
+{
+	return m_nState;
+}
+
+bool CHitman2DScreenButton::GetToggle(void) const
+{
+	return m_bToggle;
+}
+
+void CHitman2DScreenButton::SetToggle(bool bToggle)
+{
+	m_bToggle = bToggle;
+
+	if(true == m_bPushed)
+	{
+		m_nState = bToggle ? H2D_SCREENBUTTON_STATE_PUSHEDTOGGLED :
+							 H2D_SCREENBUTTON_STATE_PUSHED;
+	}
+	else
+	{
+		if(true == m_bHover)
+			m_nState = bToggle ? H2D_SCREENBUTTON_STATE_HOVERTOGGLED :
+								 H2D_SCREENBUTTON_STATE_HOVER;
+		else
+			m_nState = bToggle ? H2D_SCREENBUTTON_STATE_NORMALTOGGLED :
+								 H2D_SCREENBUTTON_STATE_NORMAL;
+	}
+
+	UpdateState(true);
+}
+
+const CThunderString& CHitman2DScreenButton::GetCommandScript(void) const
+{
+	return m_strCommandScript;
+}
+
+void CHitman2DScreenButton::SetCommandScript(LPCWSTR pszCommandScript)
+{
+	m_strCommandScript = pszCommandScript;
+}
+
+const CThunderString& CHitman2DScreenButton::GetCommandLabel(void) const
+{
+	return m_strCommandLabel;
+}
+
+void CHitman2DScreenButton::SetCommandLabel(LPCWSTR pszLabel)
+{
+	m_strCommandLabel = pszLabel;
+}
+
+const CThunderTextureInstanceDynamic& CHitman2DScreenButton::GetBackgroundConst(H2D_SCREENBUTTON_STATES nState) const
+{
+	return m_states[nState];
+}
+
+CThunderTextureInstanceDynamic& CHitman2DScreenButton::GetBackground(H2D_SCREENBUTTON_STATES nState)
+{
+	return m_states[nState];
+}
+
+CThunderColor& CHitman2DScreenButton::GetBlend(H2D_SCREENBUTTON_STATES nState)
+{
+	return m_clrStateBlends[nState];
+}
+
+const CThunderColor& CHitman2DScreenButton::GetBlendConst(H2D_SCREENBUTTON_STATES nState) const
+{
+	return m_clrStateBlends[nState];
+};
+
+void CHitman2DScreenButton::SetBlend(H2D_SCREENBUTTON_STATES nState, D3DCOLOR clrBlend)
+{
+	m_clrStateBlends[nState] = clrBlend;
+}
+
+void CHitman2DScreenButton::Deserialize(const CThunderMLElem& rRoot)
+{
+	CThunderScreen::Deserialize(rRoot);
+
+	// Read button flags (optional)
+
+	const CThunderMLElem* pElem = rRoot.FindChildConst(H2D_SZ_SCREEN_FLAGS);
+
+	if(pElem != NULL)
+	{
+		m_dwFlags |= DeserializeFlags(*pElem,
+									  H2D_SZ_SCREENBUTTON_FLAGS,
+									  H2D_DW_SCREENBUTTON_FLAGS,
+									  sizeof(H2D_DW_SCREENBUTTON_FLAGS) /
+										sizeof(DWORD));
+	}
+
+	// Read mnemonic (optional)
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENBUTTON_MNEMONIC,
+								 THU_MLELEM_VALUE,
+								 THU_VAR_STRING);
+
+	CHitman2DScreenOverlapped* pOverlappedParent =
+		dynamic_cast<CHitman2DScreenOverlapped*>(m_pParent);
+
+	if(pElem != NULL && pOverlappedParent != NULL)
+		pOverlappedParent->SetMnemonic(this, int(*pElem->GetStringValue()));
+
+	// Read command (optional)
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENBUTTON_COMMAND,
+								 THU_MLELEM_VALUE,
+								 THU_VAR_STRING);
+
+	if(pElem != NULL)
+	{
+		LPCWSTR pszCommand = pElem->GetStringValue();
+
+		int nLen = wcslen(pszCommand);
+		int nPosLabel = nLen - 1;
+
+		for(; nPosLabel != 0 && pszCommand[nPosLabel] != L':'; nPosLabel--);
+
+		WCHAR szScriptPath[MAX_PATH] = {0};
+
+		if(nPosLabel > 0)
+		{
+			// Get script path
+
+			wcsncpy_s(szScriptPath, MAX_PATH, pszCommand, nPosLabel);
+
+			// Get script label
+
+			int nLabelLen = nLen - nPosLabel;
+
+			try
+			{
+				m_strCommandLabel.Allocate(nLabelLen);
+			}
+
+			catch(bad_alloc e)
+			{
+				throw CThunderErrorMemAlloc(__FUNCTIONW__, sizeof(WCHAR) * (nLabelLen + 1));
+			}
+
+			m_strCommandLabel.CopyToBuffer(nLabelLen,
+										   pszCommand + nPosLabel + 1,
+										   nLabelLen);
+		}
+		else
+		{
+			// Get script path
+
+			wcscpy_s(szScriptPath, MAX_PATH, pszCommand);
+		}
+
+		// Make sure script path is absolute
+
+		if(PathIsRelative(szScriptPath) == TRUE)
+		{
+			WCHAR szCurDir[MAX_PATH] = {0};
+			GetCurrentDirectory(MAX_PATH, szCurDir);
+
+			LPCWSTR pszDirs[] = { szCurDir, NULL };
+			PathResolve(szScriptPath, pszDirs, PRF_FIRSTDIRDEF);
+		}
+
+		m_strCommandScript = szScriptPath;
+		
+		// Pre-load script, if stream cache is enabled
+
+		if(m_rEngine.GetOption(THU_OPTION_ENABLESTREAMCACHE) == TRUE)
+		{
+			CThunderStream stream(&m_rEngine.GetErrors(),
+								  &m_rEngine.GetStreamCache());
+
+			try
+			{
+				stream.Open(m_strCommandScript,
+							GENERIC_READ,
+							OPEN_EXISTING,
+							FILE_FLAG_SEQUENTIAL_SCAN);
+			}
+
+			catch(CThunderError& rError)
+			{
+				UNREFERENCED_PARAMETER(rError);
+
+				CHitman2DGame::PrintLastError(m_rEngine);
+			}
+		}
+	}
+
+	// Read selected
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENBUTTON_SELECTED,
+								 THU_MLELEM_VALUE);
+
+	if(pElem != NULL && (pElem->GetVarType() == THU_VAR_INT ||
+	   pElem->GetVarType() == THU_VAR_BOOL))
+	{
+		m_bToggle = pElem->GetBoolValue();
+	}
+
+	// Read state textures and blends
+
+	bool bStatesRead[H2D_SCREENBUTTON_STATE_COUNT] = { false };
+	bool bStateBlendsRead[H2D_SCREENBUTTON_STATE_COUNT] = { false };
+
+	try
+	{
+		for(int nState = H2D_SCREENBUTTON_STATE_NORMAL;
+			nState < H2D_SCREENBUTTON_STATE_COUNT;
+			nState++)
+		{
+			pElem = rRoot.FindChildConst(H2D_SZ_SCREENBUTTON_STATETEX[nState]);
+
+			if(pElem != NULL)
+			{
+				m_states[nState].Deserialize(m_rEngine, *pElem);
+
+				m_bNoStateTextures = false;
+			}
+			else if(m_pStyle != NULL)
+			{
+				const CThunderTextureInstanceDynamic* pTexInst =
+					m_pStyle->GetTextureInstance(H2D_SZ_SCREENBUTTON_STATETEX[nState]);
+
+				if(pTexInst != NULL)
+				{
+					m_states[nState] = *pTexInst;
+					m_bNoStateTextures = false;
+				}
+			}
+
+			pElem = rRoot.FindChildConst(H2D_SZ_SCREENBUTTON_STATEBLEND[nState]);
+
+			if(pElem != NULL)
+			{
+				m_clrStateBlends[nState].Deserialize(*pElem);
+
+				m_bNoStateBlends = false;
+			}
+			else if(m_pStyle != NULL)
+			{
+				const CThunderColor* pColorElem	=
+					m_pStyle->GetColor(H2D_SZ_SCREENBUTTON_STATEBLEND[nState]);
+
+				if(pColorElem != NULL)
+				{
+					m_clrStateBlends[nState] = *pColorElem;
+					m_bNoStateBlends = false;
+				}
+			}
+		}
+
+		// Validate toggle
+
+		if(true == m_bToggle && IsFlagSet(H2D_SCREENBUTTON_TOGGLE) == false)
+			m_bToggle = false;
+
+		// Set initial state
+
+		if(IsFlagSet(THU_SCREEN_DISABLED) == true)
+		{
+			m_nState = m_bToggle ? H2D_SCREENBUTTON_STATE_DISABLEDTOGGLED :
+								   H2D_SCREENBUTTON_STATE_DISABLED;
+		}
+		else if(true == m_bPushed)
+		{
+			m_nState = m_bToggle ? H2D_SCREENBUTTON_STATE_PUSHEDTOGGLED :
+								   H2D_SCREENBUTTON_STATE_PUSHED;
+		}
+		else if(true == m_bHover)
+		{
+			m_nState = m_bToggle ? H2D_SCREENBUTTON_STATE_HOVERTOGGLED :
+								   H2D_SCREENBUTTON_STATE_HOVER;
+		}
+		else
+		{
+			m_nState = m_bToggle ? H2D_SCREENBUTTON_STATE_NORMALTOGGLED :
+								   H2D_SCREENBUTTON_STATE_NORMAL;
+		}
+
+		UpdateState(false);
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileDeserialize(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath()));
+	}
+}
+
+DWORD CHitman2DScreenButton::GetMemoryFootprint(void) const
+{
+	return sizeof(CHitman2DScreenButton) - sizeof(CThunderScreen) * 2 +
+		   CThunderScreen::GetMemoryFootprint() +
+		   m_strCommandScript.GetLengthBytes() +
+		   m_strCommandLabel.GetLengthBytes();
+}
+
+void CHitman2DScreenButton::OnMouseLDown(POINT pt)
+{
+	m_bPushed = true;
+
+	if(IsFlagSet(H2D_SCREENBUTTON_TOGGLE) == true)
+	{
+		if(true == m_bToggle)
+			m_nState = H2D_SCREENBUTTON_STATE_PUSHEDTOGGLED;
+		else
+			m_nState = H2D_SCREENBUTTON_STATE_PUSHED;
+	}
+	else
+	{
+		m_nState = H2D_SCREENBUTTON_STATE_PUSHED;
+	}
+
+	m_rEngine.GetScreens().SetCaptureScreen(this);
+
+	UpdateState(true);
+
+	// Notify
+
+	if(m_pParent != NULL)
+	{
+		m_pParent->OnNotify(H2D_SCREENBUTTON_NOTIFY_SELECT,
+							this,
+							H2D_SCREENBUTTON_NOTIFY_SELECT_PUSHED);
+	}
+}
+
+void CHitman2DScreenButton::OnMouseLUp(POINT pt)
+{
+	// Reset capture
+
+	if(m_rEngine.GetScreens().GetCaptureScreen() == this)
+		m_rEngine.GetScreens().SetCaptureScreen(NULL);
+
+	// Update state
+
+	m_bPushed = false;
+
+	if(m_bHover)
+	{
+		// Mouse was let up while it was over the button
+
+		if(IsFlagSet(H2D_SCREENBUTTON_TOGGLE) == true)
+		{
+			if(IsFlagSet(H2D_SCREENBUTTON_RADIO) == true &&
+			   false ==  m_bToggle &&
+			   m_pParent != NULL)
+			{
+				// If radio, untoggle other radios in group (meaning, with the same ID)
+
+				for(list<CThunderScreen*>::iterator pos = m_pParent->GetChildren().GetFirstPos();
+					pos != m_pParent->GetChildren().GetLastPos();
+					pos++)
+				{
+					// Don't untoggle self
+
+					if(this == (*pos)) continue;
+
+					if((*pos)->GetID() == GetID() &&
+					   (*pos)->GetClass() == GetClass() &&
+					   (*pos)->IsFlagSet(H2D_SCREENBUTTON_RADIO))
+					{
+						CHitman2DScreenButton* pButton =
+							dynamic_cast<CHitman2DScreenButton*>(*pos);
+
+						if(true == pButton->m_bToggle)
+						{
+							pButton->m_bToggle = false;
+							pButton->m_nState = H2D_SCREENBUTTON_STATE_NORMAL;
+
+							pButton->UpdateState(true);
+						}
+					}
+				}
+			}
+
+			m_bToggle = !m_bToggle;
+
+			m_nState = m_bToggle ? H2D_SCREENBUTTON_STATE_HOVERTOGGLED :
+								   H2D_SCREENBUTTON_STATE_HOVER;
+
+			UpdateState(true);
+
+			// Notify
+
+			if(m_pParent != NULL)
+			{
+				m_pParent->OnNotify(H2D_SCREENBUTTON_NOTIFY_SELECT,
+									this,
+									m_bHover ? H2D_SCREENBUTTON_NOTIFY_SELECT_HOVER :
+											   H2D_SCREENBUTTON_NOTIFY_SELECT_NONE);
+			}
+
+			OnAction();
+		}
+		else
+		{
+			m_nState = H2D_SCREENBUTTON_STATE_HOVER;
+
+			UpdateState(true);
+
+			// Notify
+
+			if(m_pParent != NULL)
+			{
+				m_pParent->OnNotify(H2D_SCREENBUTTON_NOTIFY_SELECT,
+									this,
+									m_bHover ? H2D_SCREENBUTTON_NOTIFY_SELECT_HOVER :
+											   H2D_SCREENBUTTON_NOTIFY_SELECT_NONE);
+			}
+
+			OnAction();
+		}
+	}
+	else
+	{
+		// Mouse was let up when it was out of the button
+
+		if(IsFlagSet(H2D_SCREENBUTTON_TOGGLE) == true)
+			m_nState = m_bToggle ? H2D_SCREENBUTTON_STATE_NORMALTOGGLED :
+								   H2D_SCREENBUTTON_STATE_NORMAL;
+		else
+			m_nState = H2D_SCREENBUTTON_STATE_NORMAL;
+
+		UpdateState(true);
+
+		// Notify
+
+		if(m_pParent != NULL)
+		{
+			m_pParent->OnNotify(H2D_SCREENBUTTON_NOTIFY_SELECT,
+								this,
+								m_bHover ? H2D_SCREENBUTTON_NOTIFY_SELECT_HOVER :
+										   H2D_SCREENBUTTON_NOTIFY_SELECT_NONE);
+		}
+	}
+}
+
+void CHitman2DScreenButton::OnMouseEnter(void)
+{
+	// If the mouse is down, don't become hover if not pushed
+
+	m_bHover = true;
+
+	if(true == m_bPushed)
+	{
+		m_nState = IsFlagSet(H2D_SCREENBUTTON_TOGGLE) && m_bToggle ?
+			H2D_SCREENBUTTON_STATE_PUSHEDTOGGLED : H2D_SCREENBUTTON_STATE_PUSHED;
+	}
+	else
+	{
+		m_nState = IsFlagSet(H2D_SCREENBUTTON_TOGGLE) && m_bToggle ?
+			H2D_SCREENBUTTON_STATE_HOVERTOGGLED : H2D_SCREENBUTTON_STATE_HOVER;
+	}
+	
+	UpdateState(true);
+
+	if(dynamic_cast<CHitman2DScreenButton*>(m_rEngine.GetScreens().GetFocusScreen()))
+		m_rEngine.GetScreens().SetFocusScreen(this);
+
+	// Notify
+
+	if(m_pParent != NULL)
+	{
+		m_pParent->OnNotify(H2D_SCREENBUTTON_NOTIFY_SELECT,
+							this,
+							H2D_SCREENBUTTON_NOTIFY_SELECT_HOVER);
+	}
+}
+
+void CHitman2DScreenButton::OnMouseLeave(void)
+{
+	m_bHover = false;
+
+	m_nState = IsFlagSet(H2D_SCREENBUTTON_TOGGLE) && m_bToggle ?
+			   H2D_SCREENBUTTON_STATE_NORMALTOGGLED :
+			   H2D_SCREENBUTTON_STATE_NORMAL;
+
+	UpdateState(true);
+
+	// Notify
+
+	if(m_pParent != NULL)
+	{
+		m_pParent->OnNotify(H2D_SCREENBUTTON_NOTIFY_SELECT,
+							this,
+							H2D_SCREENBUTTON_NOTIFY_SELECT_NONE);
+	}
+}
+
+void CHitman2DScreenButton::OnKeyDown(int nKeyCode)
+{
+	if(VK_RETURN == nKeyCode)
+	{
+		OnAction();
+	}
+	else if(VK_SPACE == nKeyCode)
+	{
+		// Simulate mouse down
+
+		m_bPushed = true;
+
+		if(IsFlagSet(H2D_SCREENBUTTON_TOGGLE) == true)
+		{
+			if(true == m_bToggle)
+				m_nState = H2D_SCREENBUTTON_STATE_PUSHEDTOGGLED;
+			else
+				m_nState = H2D_SCREENBUTTON_STATE_PUSHED;
+		}
+		else
+		{
+			m_nState = H2D_SCREENBUTTON_STATE_PUSHED;
+		}
+
+		UpdateState(true);
+
+		// Notify
+
+		if(m_pParent != NULL)
+		{
+			m_pParent->OnNotify(H2D_SCREENBUTTON_NOTIFY_SELECT,
+								this,
+								H2D_SCREENBUTTON_NOTIFY_SELECT_PUSHED);
+		}
+	}
+	else
+	{
+		// Transfer to parent, for mnemonic processing and cancel command
+
+		if(m_pParent != NULL)
+			m_pParent->OnKeyDown(nKeyCode);
+	}
+}
+
+void CHitman2DScreenButton::OnKeyUp(int nKeyCode)
+{
+	if(VK_SPACE == nKeyCode)
+	{
+		// Simulate mouse up
+
+		m_bPushed = false;
+
+		if(IsFlagSet(H2D_SCREENBUTTON_TOGGLE) == true)
+		{
+			if(IsFlagSet(H2D_SCREENBUTTON_RADIO) == true &&
+			   m_bToggle == false &&
+			   m_pParent != NULL)
+			{
+				// If radio, untoggle other radios in group (meaning, with the same ID)
+
+				for(list<CThunderScreen*>::iterator pos = m_pParent->GetChildren().GetFirstPos();
+					pos != m_pParent->GetChildren().GetLastPos();
+					pos++)
+				{
+					// Don't untoggle self
+
+					if(this == (*pos)) continue;
+
+					if((*pos)->GetID() == GetID() &&
+						(*pos)->GetClass() == GetClass() &&
+						(*pos)->IsFlagSet(H2D_SCREENBUTTON_RADIO))
+					{
+						CHitman2DScreenButton* pButton =
+							dynamic_cast<CHitman2DScreenButton*>(*pos);
+
+						if(true == pButton->m_bToggle)
+						{
+							pButton->m_bToggle = false;
+							pButton->m_nState = H2D_SCREENBUTTON_STATE_NORMAL;
+
+							pButton->UpdateState(true);
+						}
+					}
+				}
+			}
+		}
+
+		m_bToggle = !m_bToggle;
+
+		m_nState = m_bToggle ? H2D_SCREENBUTTON_STATE_HOVERTOGGLED :
+							   H2D_SCREENBUTTON_STATE_HOVER;
+
+		UpdateState(true);
+
+		OnAction();
+	}
+}
+
+void CHitman2DScreenButton::OnFocus(CThunderScreen* pOldFocus)
+{
+	H2D_SCREENBUTTON_STATES nNewState = m_bToggle ?
+										H2D_SCREENBUTTON_STATE_HOVERTOGGLED :
+										H2D_SCREENBUTTON_STATE_HOVER;
+
+	if(m_nState == nNewState) return;
+
+	m_nState = nNewState;
+
+	UpdateState(true);
+
+	// Notify
+
+	if(m_pParent != NULL)
+	{
+		m_pParent->OnNotify(H2D_SCREENBUTTON_NOTIFY_SELECT,
+							this,
+							H2D_SCREENBUTTON_NOTIFY_SELECT_HOVER);
+	}
+}
+
+void CHitman2DScreenButton::OnDefocus(CThunderScreen* pNewFocus)
+{
+	if(true == m_bHover && true == m_bPushed) return;
+
+	m_bHover = false;
+	m_bPushed = false;
+
+	H2D_SCREENBUTTON_STATES nNewState = (IsFlagSet(H2D_SCREENBUTTON_TOGGLE) == true &&
+										 true == m_bToggle) ?
+										 H2D_SCREENBUTTON_STATE_NORMALTOGGLED :
+										 H2D_SCREENBUTTON_STATE_NORMAL;
+
+	if(m_nState == nNewState) return;
+
+	m_nState = nNewState;
+
+	UpdateState(true);
+
+	// Notify
+
+	if(m_pParent != NULL)
+	{
+		m_pParent->OnNotify(H2D_SCREENBUTTON_NOTIFY_SELECT,
+							this,
+							H2D_SCREENBUTTON_NOTIFY_SELECT_NONE);
+	}
+}
+
+void CHitman2DScreenButton::UpdateState(bool bRender)
+{
+	// Change the background to current state texture
+
+	if(false == m_bNoStateTextures)
+		m_Background = m_states[m_nState];
+
+	// Change blend to current state blend
+
+	if(false == m_bNoStateBlends)
+		m_clrBlend = m_clrStateBlends[m_nState];
+
+	// Invalidate
+
+	Invalidate();
+}
+
+void CHitman2DScreenButton::OnAction(void)
+{
+	if(m_strCommandScript.IsEmpty() == true)
+	{
+		// Call parent's OnCommand
+
+		if(m_pParent != NULL)
+			m_pParent->OnCommand(m_nID, this);
+	}
+	else
+	{
+		// Execute command script
+
+		try
+		{
+			m_rEngine.GetCommands().ExecuteScriptFile(m_strCommandScript,
+													  m_strCommandLabel);
+		}
+
+		catch(CThunderError& rError)
+		{
+			UNREFERENCED_PARAMETER(rError);
+
+			// Don't let bad commands close down application
+
+			CHitman2DGame::PrintLastError(m_rEngine);
+		}
+	}
+}
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenButtonEx implementation
+\*----------------------------------------------------------*/
+
+CHitman2DScreenButtonEx::CHitman2DScreenButtonEx(CThunderEngine& rEngine,
+												 LPCWSTR pszClass,
+												 CThunderScreen* pParent):
+
+												 CHitman2DScreenButton(rEngine, pszClass, pParent),
+												 m_pFontDescription(NULL),
+												 m_clrCaption(0xFFFFFFFF),
+												 m_clrDescription(0xFFFFFFFF),
+												 m_vrRightPos(0.0f, 0.0f, 0.0f),
+												 m_vrCenterPos(0.0f, 0.0f, 0.0f),
+												 m_vrIconPos(0.0f, 0.0f, 0.0f),
+												 m_nMargin(10)
+{
+	SetRectEmpty(&m_rcCaption);
+	SetRectEmpty(&m_rcDescription);
+}
+
+CHitman2DScreenButtonEx::~CHitman2DScreenButtonEx(void)
+{
+	Empty();
+}
+
+CHitman2DScreenButtonEx* CHitman2DScreenButtonEx::CreateInstance(CThunderEngine& rEngine,
+																 LPCWSTR pszClass,
+																 CThunderScreen* pParent)
+{
+	return new CHitman2DScreenButtonEx(rEngine, pszClass, pParent);
+}
+
+const CThunderString& CHitman2DScreenButtonEx::GetCaption(void) const
+{
+	return m_strCaption;
+}
+
+void CHitman2DScreenButtonEx::SetCaption(LPCWSTR pszCaption)
+{
+	m_strCaption = pszCaption;
+}
+
+const CThunderString& CHitman2DScreenButtonEx::GetDescription(void) const
+{
+	return m_strDescription;
+}
+
+void CHitman2DScreenButtonEx::SetDescription(LPCWSTR pszDescription)
+{
+	m_strDescription = pszDescription;
+}
+
+CThunderFont* CHitman2DScreenButtonEx::GetDescriptionFont(void)
+{
+	return m_pFontDescription;
+}
+
+CThunderFont* CHitman2DScreenButtonEx::GetCaptionFont(void)
+{
+	return m_pFontCaption;
+}
+
+void CHitman2DScreenButtonEx::SetCaptionFont(CThunderFont* pCaptionFont)
+{
+	if(pCaptionFont != NULL) pCaptionFont->AddRef();
+	if(m_pFontCaption != NULL) m_pFontCaption->Release();
+
+	m_pFontCaption = pCaptionFont;
+
+	UpdateLayout();
+}
+
+void CHitman2DScreenButtonEx::SetDescriptionFont(CThunderFont* pDescriptionFont)
+{
+	if(pDescriptionFont != NULL) pDescriptionFont->AddRef();
+	if(m_pFontDescription != NULL) m_pFontDescription->Release();
+
+	m_pFontDescription = pDescriptionFont;
+
+	UpdateLayout();
+}
+
+CThunderColor& CHitman2DScreenButtonEx::GetCaptionColor(void)
+{
+	return m_clrCaption;
+}
+
+const CThunderColor& CHitman2DScreenButtonEx::GetCaptionColorConst(void) const
+{
+	return m_clrCaption;
+}
+
+void CHitman2DScreenButtonEx::SetCaptionColor(D3DCOLOR clrCaption)
+{
+	m_clrCaption = clrCaption;
+}
+
+CThunderColor& CHitman2DScreenButtonEx::GetDescriptionColor(void)
+{
+	return m_clrDescription;
+}
+
+const CThunderColor& CHitman2DScreenButtonEx::GetDescriptionColorConst(void) const
+{
+	return m_clrDescription;
+}
+
+void CHitman2DScreenButtonEx::SetDescriptionColor(D3DCOLOR clrDescription)
+{
+	m_clrDescription = clrDescription;
+}
+
+CThunderTextureInstanceDynamic& CHitman2DScreenButtonEx::GetIcon(void)
+{
+	return m_Icon;
+}
+
+CThunderTextureInstanceDynamic& CHitman2DScreenButtonEx::GetBackgroundLeft(void)
+{
+	return m_Left;
+}
+
+CThunderTextureInstanceDynamic& CHitman2DScreenButtonEx::GetBackgroundRight(void)
+{
+	return m_Right;
+}
+
+CThunderTextureInstanceDynamic& CHitman2DScreenButtonEx::GetBackgroundCenterRepeat(void)
+{
+	return m_CenterRepeat;
+}
+
+int CHitman2DScreenButtonEx::GetMargin(void) const
+{
+	return m_nMargin;
+}
+
+void CHitman2DScreenButtonEx::SetMargin(int nMargin)
+{
+	m_nMargin = nMargin;
+
+	UpdateLayout();
+}
+
+void CHitman2DScreenButtonEx::OnRender(LPCRECT prc)
+{
+	HRESULT hr = 0;
+
+	// Render left corner
+
+	m_rEngine.GetGraphics().RenderQuad(m_Left.GetTexture()->GetD3DTexture(),
+									   m_Left.GetSrcRectConst(),
+									   m_vrCachedPos,
+									   GetFrontBufferBlend());
+
+	// Render center repeat
+
+	m_rEngine.GetGraphics().RenderQuad(m_CenterRepeat.GetTexture()->GetD3DTexture(),
+									   m_CenterRepeat.GetSrcRectConst(),
+									   m_vrCenterPos,
+									   GetFrontBufferBlend());
+
+	// Render right corner
+
+	m_rEngine.GetGraphics().RenderQuad(m_Right.GetTexture()->GetD3DTexture(),
+									   m_Right.GetSrcRectConst(),
+									   m_vrRightPos,
+									   GetFrontBufferBlend());
+
+	// Render icon (optional)
+
+	if(m_Icon.GetTexture() != NULL)
+	{
+		m_rEngine.GetGraphics().RenderQuad(m_Icon.GetTexture()->GetD3DTexture(),
+										   m_Icon.GetSrcRectConst(),
+										   m_vrIconPos,
+										   GetFrontBufferBlend());
+	}
+
+	// Render caption (optional)
+
+	if(m_strCaption.IsEmpty() == false)
+	{
+		hr = m_pFontCaption->GetD3DXFont()->DrawText(m_rEngine.GetGraphics().GetD3DXSprite(),
+				m_strCaption,
+				m_strCaption.GetLength(),
+				&m_rcCaption,
+				DT_LEFT | DT_SINGLELINE | DT_NOCLIP,
+				m_clrCaption);
+
+		if(FAILED(hr))
+			throw m_rEngine.GetErrors().Push(new CThunderErrorD3DXSpriteDraw(__FUNCTIONW__, hr));
+	}
+
+	// Render description (optional)
+
+	if(m_strDescription.IsEmpty() == false)
+	{
+		hr = m_pFontDescription->GetD3DXFont()->DrawText(m_rEngine.GetGraphics().GetD3DXSprite(),
+			 m_strDescription,
+			 m_strDescription.GetLength(),
+			 &m_rcDescription, DT_LEFT, m_clrDescription);
+
+		if(FAILED(hr))
+			throw m_rEngine.GetErrors().Push(new CThunderErrorD3DXSpriteDraw(__FUNCTIONW__, hr));
+	}
+}
+
+void CHitman2DScreenButtonEx::Deserialize(const CThunderMLElem& rRoot)
+{
+	CHitman2DScreenButton::Deserialize(rRoot);
+
+	// Read caption
+
+	const CThunderMLElem* pElem =
+		rRoot.FindChildConst(H2D_SZ_SCREENBUTTONEX_CAPTION,
+							 THU_MLELEM_VALUE,
+							 THU_VAR_STRING);
+
+	if(pElem != NULL)
+		m_strCaption = pElem->GetStringValue();
+
+	// Read description
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENBUTTONEX_DESCRIPTION,
+								 THU_MLELEM_VALUE,
+								 THU_VAR_STRING);
+
+	if(pElem != NULL)
+		m_strDescription = pElem->GetStringValue();
+
+	// Read caption font
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENBUTTONEX_CAPTIONFONT);
+
+	if(pElem != NULL)
+	{
+		// Specified inline
+
+		try
+		{
+			m_pFontCaption = m_rEngine.GetFonts().LoadInstance(*pElem);
+		}
+
+		catch(CThunderError& rError)
+		{
+			UNREFERENCED_PARAMETER(rError);
+
+			throw m_rEngine.GetErrors().Push(new CThunderErrorFileDeserialize(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath()));
+		}
+	}
+	else if(m_pStyle != NULL)
+	{
+		// Specified in style
+
+		m_pFontCaption = m_pStyle->GetFont(H2D_SZ_SCREENBUTTONEX_CAPTIONFONT);
+
+		if(NULL == m_pFontCaption)
+			throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidThemeStyleElement(__FUNCTIONW__, m_strStyle, H2D_SZ_SCREENBUTTONEX_CAPTIONFONT));
+	}
+	else
+	{
+		// Not specified
+
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileElement(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath(), H2D_SZ_SCREENBUTTONEX_CAPTIONFONT));
+	}
+
+	m_pFontCaption->AddRef();
+
+	// Read description font
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENBUTTONEX_DESCRIPTIONFONT);
+
+	if(pElem != NULL)
+	{
+		// Specified inline
+
+		try
+		{
+			m_pFontDescription = m_rEngine.GetFonts().LoadInstance(*pElem);
+		}
+
+		catch(CThunderError& rError)
+		{
+			UNREFERENCED_PARAMETER(rError);
+
+			throw m_rEngine.GetErrors().Push(new CThunderErrorFileDeserialize(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath()));
+		}
+	}
+	else if(m_pStyle != NULL)
+	{
+		// Specified in style
+
+		m_pFontDescription = m_pStyle->GetFont(H2D_SZ_SCREENBUTTONEX_DESCRIPTIONFONT);
+
+		if(NULL == m_pFontDescription)
+			throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidThemeStyleElement(__FUNCTIONW__, m_strStyle, H2D_SZ_SCREENBUTTONEX_DESCRIPTIONFONT));
+	}
+	else
+	{
+		// Not specified
+
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileElement(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath(), H2D_SZ_SCREENBUTTONEX_DESCRIPTIONFONT));
+	}
+
+	m_pFontDescription->AddRef();
+
+	// Read caption color
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENBUTTONEX_CAPTIONCOLOR);
+
+	if(pElem != NULL)
+	{
+		// Specified inline
+
+		try
+		{
+			m_clrCaption.Deserialize(*pElem);
+		}
+
+		catch(CThunderError& rError)
+		{
+			UNREFERENCED_PARAMETER(rError);
+
+			throw m_rEngine.GetErrors().Push(new CThunderErrorFileDeserialize(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath()));
+		}
+	}
+	else if(m_pStyle != NULL)
+	{
+		// Specified in style
+
+		const CThunderColor* pColor = m_pStyle->GetColor(H2D_SZ_SCREENBUTTONEX_CAPTIONCOLOR);
+
+		if(NULL == pColor)
+			throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidThemeStyleElement(__FUNCTIONW__, m_strStyle, H2D_SZ_SCREENBUTTONEX_CAPTIONCOLOR));
+	
+		m_clrCaption = *pColor;
+	}
+
+	// Read description color
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENBUTTONEX_DESCRIPTIONCOLOR);
+
+	if(pElem != NULL)
+	{
+		try
+		{
+			m_clrDescription.Deserialize(*pElem);
+		}
+
+		catch(CThunderError& rError)
+		{
+			UNREFERENCED_PARAMETER(rError);
+
+			throw m_rEngine.GetErrors().Push(new CThunderErrorFileDeserialize(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath()));
+		}
+	}
+	else if(m_pStyle != NULL)
+	{
+		const CThunderColor* pColor =
+			m_pStyle->GetColor(H2D_SZ_SCREENBUTTONEX_DESCRIPTIONCOLOR);
+
+		if(NULL == pColor)
+			throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidThemeStyleElement(__FUNCTIONW__, m_strStyle, H2D_SZ_SCREENBUTTONEX_DESCRIPTIONCOLOR));
+
+		m_clrDescription = *pColor;
+	}
+
+	// Read margin
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENBUTTONEX_MARGIN,
+								 THU_MLELEM_VALUE,
+								 THU_VAR_INT);
+	
+	if(pElem != NULL)
+	{
+		m_nMargin = pElem->GetIntValue();
+	}
+	else if(m_pStyle != NULL)
+	{
+		const CThunderVariable* pVar =
+			m_pStyle->GetVariable(H2D_SZ_SCREENBUTTONEX_MARGIN);
+
+		if(NULL == pVar)
+			throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidThemeStyleElement(__FUNCTIONW__, m_strStyle, H2D_SZ_SCREENBUTTONEX_MARGIN));
+
+		if(pVar->GetVarType() == THU_VAR_INT)
+			m_nMargin = pVar->GetIntValue();
+		else
+			throw m_rEngine.GetErrors().Push(new CThunderErrorFileElementFormat(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath(), H2D_SZ_SCREENBUTTONEX_MARGIN, CThunderVariable::GetVarTypeString(THU_VAR_INT)));
+	}
+
+	// Read icon texture
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENBUTTONEX_ICON);
+
+	if(pElem != NULL)
+	{
+		try
+		{
+			m_Icon.Deserialize(m_rEngine, *pElem);
+		}
+
+		catch(CThunderError& rError)
+		{
+			UNREFERENCED_PARAMETER(rError);
+
+			throw m_rEngine.GetErrors().Push(new CThunderErrorFileDeserialize(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath()));
+		}
+	}
+
+	// Read left corner texture
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENBUTTONEX_LEFTCORNER);
+
+	if(pElem != NULL)
+	{
+		// Specified inline
+
+		try
+		{
+			m_Left.Deserialize(m_rEngine, *pElem);
+		}
+
+		catch(CThunderError& rError)
+		{
+			UNREFERENCED_PARAMETER(rError);
+
+			throw m_rEngine.GetErrors().Push(new CThunderErrorFileDeserialize(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath()));
+		}
+	}
+	else if(m_pStyle != NULL)
+	{
+		// Specified in style
+
+		const CThunderTextureInstanceDynamic* pTexInst =
+			m_pStyle->GetTextureInstance(H2D_SZ_SCREENBUTTONEX_LEFTCORNER);
+
+		if(NULL == pTexInst)
+			throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidThemeStyleElement(__FUNCTIONW__, m_strStyle, H2D_SZ_SCREENBUTTONEX_LEFTCORNER));
+
+		m_Left = *pTexInst;
+	}
+	else
+	{
+		// Not specified
+
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileElement(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath(), H2D_SZ_SCREENBUTTONEX_LEFTCORNER));
+	}
+
+	// Read right corner texture
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENBUTTONEX_RIGHTCORNER);
+
+	if(pElem != NULL)
+	{
+		// Specified inline
+
+		try
+		{
+			m_Right.Deserialize(m_rEngine, *pElem);
+		}
+
+		catch(CThunderError& rError)
+		{
+			UNREFERENCED_PARAMETER(rError);
+
+			throw m_rEngine.GetErrors().Push(new CThunderErrorFileDeserialize(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath()));
+		}
+	}
+	else if(m_pStyle != NULL)
+	{
+		// Specified in style
+
+		const CThunderTextureInstanceDynamic* pTexInst =
+			m_pStyle->GetTextureInstance(H2D_SZ_SCREENBUTTONEX_RIGHTCORNER);
+
+		if(NULL == pTexInst)
+			throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidThemeStyleElement(__FUNCTIONW__, m_strStyle, H2D_SZ_SCREENBUTTONEX_RIGHTCORNER));
+
+		m_Right = *pTexInst;
+	}
+	else
+	{
+		// Not specified
+
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileElement(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath(), H2D_SZ_SCREENBUTTONEX_RIGHTCORNER));
+	}
+
+	// Read center repeat texture
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENBUTTONEX_CENTERREPEAT);
+
+	if(pElem != NULL)
+	{
+		// Specified inline
+
+		try
+		{
+			m_CenterRepeat.Deserialize(m_rEngine, *pElem);
+		}
+
+		catch(CThunderError& rError)
+		{
+			UNREFERENCED_PARAMETER(rError);
+
+			throw m_rEngine.GetErrors().Push(new CThunderErrorFileDeserialize(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath()));
+		}
+	}
+	else if(m_pStyle != NULL)
+	{
+		// Specified in style
+
+		const CThunderTextureInstanceDynamic* pTexInst =
+			m_pStyle->GetTextureInstance(H2D_SZ_SCREENBUTTONEX_CENTERREPEAT);
+
+		if(NULL == pTexInst)
+			throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidThemeStyleElement(__FUNCTIONW__, m_strStyle, H2D_SZ_SCREENBUTTONEX_CENTERREPEAT));
+
+		m_CenterRepeat = *pTexInst;
+	}
+	else
+	{
+		// Not specified
+
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileElement(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath(), H2D_SZ_SCREENBUTTONEX_CENTERREPEAT));
+	}
+}
+
+DWORD CHitman2DScreenButtonEx::GetMemoryFootprint(void) const
+{
+	return sizeof(CHitman2DScreenButtonEx) -
+		   sizeof(CHitman2DScreenButton) * 2 +
+		   CHitman2DScreenButton::GetMemoryFootprint() +
+		   m_strCaption.GetLengthBytes() +
+		   m_strDescription.GetLengthBytes();
+}
+
+void CHitman2DScreenButtonEx::OnMove(const POINT& rptOldPos)
+{
+	UpdateLayout();
+}
+
+void CHitman2DScreenButtonEx::OnSize(const SIZE& rpsOldSize)
+{
+	UpdateLayout();
+}
+
+void CHitman2DScreenButtonEx::UpdateLayout(void)
+{
+	// Cache center texture position
+
+	m_vrCenterPos.x = m_vrCachedPos.x + float(m_Left.GetSrcWidth());
+	m_vrCenterPos.y = m_vrCachedPos.y;
+	m_vrCenterPos.z = 0.0f;
+
+	// Resize center source texture position
+
+	m_CenterRepeat.GetSrcRect().right = m_CenterRepeat.GetSrcRectConst().left +
+										m_psSize.cx -
+										m_Right.GetSrcWidth() -
+										m_Left.GetSrcWidth();
+
+	// Cache right texture position
+
+	m_vrRightPos.x = m_vrCachedPos.x + float(m_psSize.cx) - float(m_Right.GetSrcWidth());
+	m_vrRightPos.y = m_vrCachedPos.y;
+	m_vrRightPos.z = 0.0f;
+
+	// Cache icon position
+
+	m_vrIconPos.x = m_vrCachedPos.x + float(m_nMargin);
+	m_vrIconPos.y = m_vrCachedPos.y + float(m_psSize.cy - m_Icon.GetSrcHeight()) / 2.0f;
+	m_vrIconPos.z = 0.0f;
+
+	// Cache caption position
+
+	TEXTMETRIC tm;
+	m_pFontCaption->GetD3DXFont()->GetTextMetrics(&tm);
+
+	m_rcCaption.left = int(m_vrCachedPos.x) + m_Icon.GetSrcWidth() + m_nMargin * 2;
+	m_rcCaption.top = int(m_vrCachedPos.y) + m_nMargin;
+	m_rcCaption.right = int(m_vrCachedPos.x) + m_psSize.cx;
+	m_rcCaption.bottom = m_rcCaption.top + tm.tmHeight + tm.tmExternalLeading;
+
+	// Cache description position
+
+	m_rcDescription.left = m_rcCaption.left;
+	m_rcDescription.top = m_rcCaption.bottom + m_nMargin / 2;
+	m_rcDescription.right = m_rcCaption.right;
+	m_rcDescription.bottom = int(m_vrCachedPos.y) + m_psSize.cy;
+}
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenProgressBar implementation
+\*----------------------------------------------------------*/
+
+CHitman2DScreenProgressBar::CHitman2DScreenProgressBar(CThunderEngine& rEngine,
+													   LPCWSTR pszClass,
+													   CThunderScreen* pParent):
+
+													   CThunderScreen(rEngine, pszClass, pParent),
+													   m_nProgress(50),
+													   m_nProgressMin(0),
+													   m_nProgressMax(100),
+													   m_nBlips(0),
+													   m_vrCenter(0.0f, 0.0f, 0.0f),
+													   m_vrRight(0.0f, 0.0f, 0.0f)
+{
+}
+
+CHitman2DScreenProgressBar::~CHitman2DScreenProgressBar(void)
+{
+}
+
+CHitman2DScreenProgressBar* CHitman2DScreenProgressBar::CreateInstance(CThunderEngine& rEngine,
+																	   LPCWSTR pszClass,
+																	   CThunderScreen* pParent)
+{
+	return new CHitman2DScreenProgressBar(rEngine, pszClass, pParent);
+}
+
+CThunderTextureInstanceDynamic& CHitman2DScreenProgressBar::GetBackgroundCenter(void)
+{
+	return m_Center;
+}
+
+int CHitman2DScreenProgressBar::GetProgressMin(void) const
+{
+	return m_nProgressMin;
+}
+
+void CHitman2DScreenProgressBar::SetProgressMin(int nProgressMin)
+{
+	m_nProgressMin = nProgressMin;
+
+	CacheProgress();
+}
+
+int CHitman2DScreenProgressBar::GetProgressMax(void) const
+{
+	return m_nProgressMax;
+}
+
+void CHitman2DScreenProgressBar::SetProgressMax(int nProgressMax)
+{
+	m_nProgressMax = nProgressMax;
+
+	CacheProgress();
+}
+
+int CHitman2DScreenProgressBar::GetProgress(void) const
+{
+	return m_nProgress;
+}
+
+void CHitman2DScreenProgressBar::SetProgress(int nProgress)
+{
+	m_nProgress = nProgress;
+
+	CacheProgress();
+}
+
+void CHitman2DScreenProgressBar::OnRender(LPCRECT prc)
+{
+	// Render left corner
+
+	m_rEngine.GetGraphics().RenderQuad(m_pLeft->GetTexture()->GetD3DTexture(),
+										m_pLeft->GetSrcRectConst(),
+										m_vrCachedPos,
+										GetFrontBufferBlend());
+
+	// Render right corner
+
+	m_rEngine.GetGraphics().RenderQuad(m_pRight->GetTexture()->GetD3DTexture(),
+										 m_pRight->GetSrcRectConst(),
+										 m_vrRight,
+										 GetFrontBufferBlend());
+	// Render center repeat
+
+	m_rEngine.GetGraphics().RenderQuad(m_Center.GetTexture()->GetD3DTexture(),
+										m_Center.GetSrcRectConst(),
+										m_vrCenter,
+										GetFrontBufferBlend());
+	// Render blips
+
+	if(m_nBlips > 0)
+	{
+		D3DXVECTOR3 vrBlip = m_vrCenter;
+
+		float fBlipWidth = float(m_pBlip->GetSrcWidth());
+
+		int nBlip = m_nBlips;
+
+		while(nBlip--)
+		{
+			m_rEngine.GetGraphics().RenderQuad(m_pBlip->GetTexture()->GetD3DTexture(),
+											    m_pBlip->GetSrcRectConst(),
+												vrBlip,
+												GetFrontBufferBlend());
+
+			vrBlip.x += fBlipWidth;
+		}
+	}
+}
+
+void CHitman2DScreenProgressBar::Deserialize(const CThunderMLElem& rRoot)
+{
+	CThunderScreen::Deserialize(rRoot);
+
+	if(m_pStyle != NULL)
+	{
+		// Read left corner texture
+
+		m_pLeft =
+			m_pStyle->GetTextureInstance(H2D_SZ_SCREENPROGRESSBAR_LEFTCORNER);
+
+		if(NULL == m_pLeft)
+			throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidThemeStyleElement(__FUNCTIONW__, m_strStyle, H2D_SZ_SCREENPROGRESSBAR_LEFTCORNER));
+
+		// Read right corner texture
+
+		m_pRight =
+			m_pStyle->GetTextureInstance(H2D_SZ_SCREENPROGRESSBAR_RIGHTCORNER);
+
+		if(NULL == m_pRight)
+			throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidThemeStyleElement(__FUNCTIONW__, m_strStyle, H2D_SZ_SCREENPROGRESSBAR_RIGHTCORNER));
+
+		// Read center repeat texture
+
+		const CThunderTextureInstanceDynamic* pTexInstCenter =
+			m_pStyle->GetTextureInstance(H2D_SZ_SCREENPROGRESSBAR_CENTERREPEAT);
+
+		if(NULL == pTexInstCenter)
+			throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidThemeStyleElement(__FUNCTIONW__, m_strStyle, H2D_SZ_SCREENPROGRESSBAR_CENTERREPEAT));
+
+		m_Center = *pTexInstCenter;
+
+		// Read blip texture
+
+		m_pBlip = m_pStyle->GetTextureInstance(H2D_SZ_SCREENPROGRESSBAR_BLIP);
+
+		if(NULL == m_pBlip)
+			throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidThemeStyleElement(__FUNCTIONW__, m_strStyle, H2D_SZ_SCREENPROGRESSBAR_BLIP));
+	}
+	else
+	{
+		throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidPtr(__FUNCTIONW__, L"m_pStyle"));
+	}
+}
+
+DWORD CHitman2DScreenProgressBar::GetMemoryFootprint(void) const
+{
+	return sizeof(CHitman2DScreenProgressBar) - sizeof(CThunderScreen) * 2 +
+		   CThunderScreen::GetMemoryFootprint();
+}
+
+void CHitman2DScreenProgressBar::OnMove(const POINT& rptOldPos)
+{
+	m_vrCenter = m_vrCachedPos;
+	m_vrCenter.x += float(m_pLeft->GetSrcWidth());
+
+	m_vrRight = m_vrCenter;
+	m_vrRight.x += float(m_Center.GetSrcWidth());
+}
+
+void CHitman2DScreenProgressBar::OnSize(const SIZE& rpsOldSize)
+{
+	CacheProgress();
+
+	m_Center.GetSrcRect().right = m_Center.GetSrcRectConst().left +
+								  m_psSize.cx - m_pLeft->GetSrcWidth() -
+								  m_pRight->GetSrcWidth();
+	
+	m_vrRight = m_vrCenter;
+	m_vrRight.x += float(m_Center.GetSrcWidth());
+}
+
+void CHitman2DScreenProgressBar::OnMouseMove(POINT pt)
+{
+	// Adjust point for screen space
+
+	pt.x += m_ptPos.x;
+	pt.y += m_ptPos.y;
+
+	// Call parent's handler
+
+	if(m_pParent != NULL) m_pParent->OnMouseMove(pt);
+}
+
+void CHitman2DScreenProgressBar::OnMouseLDown(POINT pt)
+{
+	// Adjust point for screen space
+
+	pt.x += m_ptPos.x;
+	pt.y += m_ptPos.y;
+
+	// Call parent's handler
+
+	if(m_pParent != NULL) m_pParent->OnMouseLDown(pt);
+}
+
+void CHitman2DScreenProgressBar::OnMouseLUp(POINT pt)
+{
+	// Adjust point for screen space
+
+	pt.x += m_ptPos.x;
+	pt.y += m_ptPos.y;
+
+	// Call parent's handler
+
+	if(m_pParent != NULL) m_pParent->OnMouseLUp(pt);
+}
+
+void CHitman2DScreenProgressBar::CacheProgress(void)
+{
+	float fProgress = float(m_nProgress + m_nProgressMin) / float(m_nProgressMax);
+
+	int nBlipWidth = m_pBlip->GetSrcWidth();
+
+	if(0 == nBlipWidth) return;
+
+	int nBlipSpace = m_Center.GetSrcWidth();
+
+	if(0 == nBlipSpace) return;
+
+	m_nBlips = int(float(nBlipSpace / nBlipWidth) * fProgress);
+}
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenScrollBar implementation
+\*----------------------------------------------------------*/
+
+CHitman2DScreenScrollBar::CHitman2DScreenScrollBar(CThunderEngine& rEngine,
+												   LPCWSTR pszClass,
+												   CThunderScreen* pParent):
+
+												   CThunderScreen(rEngine, pszClass, pParent),
+												   m_nMin(0),
+												   m_nMax(100),
+												   m_nPos(50),
+												   m_nPage(50),
+												   m_nShaftSize(0),
+												   m_nMinThumbSize(0),
+												   m_nThumbSize(0),
+												   m_nThumbPos(0),
+												   m_nMinThumbEdge(0),
+												   m_nMinThumbCenter(0),
+												   m_nThumbCenter(0),
+												   m_fPixelsPerUnit(0.0f),
+												   m_fWaitArrowAutoScroll(0.15f),
+												   m_fArrowAutoScrollInterval(0.1f),
+												   m_fWaitShaftAutoScroll(0.18f),
+												   m_fShaftAutoScrollInterval(0.1f),
+												   m_pTimerAutoScroll(NULL)
+{
+	ZeroMemory(m_nElemStates, sizeof(m_nElemStates));
+	ZeroMemory(m_rcHitTest, sizeof(m_rcHitTest));
+	
+	m_nShaftPartsSize[0] = 0;
+	m_nShaftPartsSize[1] = 0;
+
+	m_ptDragOffset.x = 0;
+	m_ptDragOffset.y = 0;
+}
+
+CHitman2DScreenScrollBar::~CHitman2DScreenScrollBar(void)
+{
+}
+
+CHitman2DScreenScrollBar* CHitman2DScreenScrollBar::CreateInstance(CThunderEngine& rEngine,
+																   LPCWSTR pszClass,
+																   CThunderScreen* pParent)
+{
+	return new CHitman2DScreenScrollBar(rEngine, pszClass, pParent);
+}
+
+int CHitman2DScreenScrollBar::GetMin(void) const
+{
+	return m_nMin;
+}
+
+void CHitman2DScreenScrollBar::SetMin(int nMin)
+{
+	m_nMin = nMin;
+
+	UpdateThumbSize();
+}
+
+int CHitman2DScreenScrollBar::GetMax(void) const
+{
+	return m_nMax;
+}
+
+void CHitman2DScreenScrollBar::SetMax(int nMax)
+{
+	m_nMax = nMax;
+
+	UpdateThumbSize();
+}
+
+int CHitman2DScreenScrollBar::GetValue(void) const
+{
+	return m_nPos;
+}
+
+void CHitman2DScreenScrollBar::SetValue(int nValue)
+{
+	m_nPos = nValue;
+
+	UpdateThumbFromPosition();
+
+	if(m_pParent != NULL)
+	{
+		m_pParent->OnNotify(H2D_SCREENSCROLLBAR_NOTIFY_SCROLL,
+							this,
+							H2D_SCREENSCROLLBAR_SCROLL_USER);
+	}
+}
+
+int CHitman2DScreenScrollBar::GetPageSize(void) const
+{
+	return m_nPage;
+}
+
+void CHitman2DScreenScrollBar::SetPageSize(int nPageSize)
+{
+	m_nPage = nPageSize > 0 ? nPageSize : 1;
+
+	UpdateThumbSize();
+}
+
+H2D_SCREENSCROLLBAR_ELEM_STATES CHitman2DScreenScrollBar::GetState(H2D_SCREENSCROLLBAR_HITTEST nElem)
+{
+	return m_nElemStates[nElem];
+}
+
+CThunderTextureInstanceDynamic& CHitman2DScreenScrollBar::GetBackground(H2D_SCREENSCROLLBAR_ELEMS nElem, H2D_SCREENSCROLLBAR_ELEM_STATES nState)
+{
+	return m_Elems[nElem][nState];
+}
+
+const CThunderTextureInstanceDynamic& CHitman2DScreenScrollBar::GetBackgroundConst(H2D_SCREENSCROLLBAR_ELEMS nElem, H2D_SCREENSCROLLBAR_ELEM_STATES nState) const
+{
+	return m_Elems[nElem][nState];
+}
+
+void CHitman2DScreenScrollBar::OnRender(LPCRECT prc)
+{
+	D3DXVECTOR3 vrPos(0.0f, m_vrCachedPos.y, 0.0f);
+
+	// Render shaft elements
+
+	if(IsFlagSet(H2D_SCREENSCROLLBAR_HORIZONTAL) == true)
+	{
+		// Render shaft left
+
+		m_rEngine.GetGraphics().RenderQuad(
+			m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTLEFT]
+				   [m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT]].GetTexture()->GetD3DTexture(),
+			m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTLEFT]
+					[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT]].GetSrcRectConst(),
+			m_vrCachedPos,
+			GetFrontBufferBlend());
+
+		// Render shaft center #1, adjusting size
+
+		vrPos.x = m_vrCachedPos.x + float(m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTLEFT]
+										 [m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT]].GetSrcWidth());
+
+		if(m_nShaftPartsSize[0] > 0)
+		{
+			RECT& rcSrcCenter1 = m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTCENTER]
+								[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT]].GetSrcRect();
+
+			rcSrcCenter1.right = rcSrcCenter1.left + m_nShaftPartsSize[0];
+
+			m_rEngine.GetGraphics().RenderQuad(
+				 m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTCENTER]
+					    [m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT]].GetTexture()->GetD3DTexture(),
+				 m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTCENTER]
+						[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT]].GetSrcRectConst(),
+				vrPos,
+				GetFrontBufferBlend());
+		}
+
+		// Render shaft center #2, adjusting size
+
+		if(m_nShaftPartsSize[1] > 0)
+		{
+			vrPos.x += float(m_nShaftPartsSize[0]);
+
+			RECT& rcSrcCenter2 = m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTCENTER]
+			[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTRIGHT]].GetSrcRect();
+
+			rcSrcCenter2.right = rcSrcCenter2.left + m_nShaftPartsSize[1];
+
+			m_rEngine.GetGraphics().RenderQuad(
+				 m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTCENTER]
+					    [m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTRIGHT]].GetTexture()->GetD3DTexture(),
+				m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTCENTER]
+					   [m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTRIGHT]].GetSrcRectConst(),
+				vrPos,
+				GetFrontBufferBlend());
+		}
+
+		// Render shaft right
+
+		vrPos.x = m_vrCachedPos.x +
+			float(m_psSize.cx - m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTRIGHT]
+									   [H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL].GetSrcWidth());
+
+		m_rEngine.GetGraphics().RenderQuad(m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTRIGHT]
+											[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTRIGHT]].GetTexture()->GetD3DTexture(),
+											m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTRIGHT]
+											[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTRIGHT]].GetSrcRectConst(),
+											vrPos,
+											GetFrontBufferBlend());
+	}
+	else
+	{
+		// Render shaft top
+
+		m_rEngine.GetGraphics().RenderQuad(m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTTOP]
+											[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP]].GetTexture()->GetD3DTexture(),
+											 m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTTOP]
+											[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP]].GetSrcRectConst(),
+											 m_vrCachedPos,
+											 GetFrontBufferBlend());
+
+		// Render shaft center #1, adjusting size
+
+		vrPos.x = m_vrCachedPos.x;
+		vrPos.y = m_vrCachedPos.y +
+			float(m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTTOP]
+						 [m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP]].GetSrcHeight());
+
+		RECT& rcCenter1 = m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTCENTER]
+						  [m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP]].GetSrcRect();
+
+		rcCenter1.bottom = rcCenter1.top + m_nShaftPartsSize[0];
+
+		m_rEngine.GetGraphics().RenderQuad(m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTCENTER]
+											[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP]].GetTexture()->GetD3DTexture(),
+											m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTCENTER]
+											[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP]].GetSrcRectConst(),
+											vrPos,
+											GetFrontBufferBlend());
+
+		// Render shaft center #2, adjusting size
+
+		vrPos.y += float(m_nShaftPartsSize[0]);
+
+		RECT& rcCenter2 = m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTCENTER]
+						 [m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTBOTTOM]].GetSrcRect();
+
+		rcCenter2.bottom = rcCenter2.top + m_nShaftPartsSize[1];
+
+		m_rEngine.GetGraphics().RenderQuad(m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTCENTER]
+											[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTBOTTOM]].GetTexture()->GetD3DTexture(),
+											m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTCENTER]
+											[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTBOTTOM]].GetSrcRectConst(),
+											vrPos,
+											GetFrontBufferBlend());
+		// Render shaft bottom
+
+		vrPos.y += float(m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTCENTER]
+						[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTBOTTOM]].GetSrcHeight());
+
+		m_rEngine.GetGraphics().RenderQuad(m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTBOTTOM]
+											[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTBOTTOM]].GetTexture()->GetD3DTexture(),
+											m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTBOTTOM]
+											[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTBOTTOM]].GetSrcRectConst(),
+											vrPos,
+											GetFrontBufferBlend());
+	}
+
+	// Render up/left arrow
+
+	vrPos.x = m_vrCachedPos.x + float(m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_UPARROW].left);
+	vrPos.y = m_vrCachedPos.y + float(m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_UPARROW].top);
+
+	m_rEngine.GetGraphics().RenderQuad(m_Elems[H2D_SCREENSCROLLBAR_ELEM_UPARROW]
+										[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_UPARROW]].GetTexture()->GetD3DTexture(),
+										m_Elems[H2D_SCREENSCROLLBAR_ELEM_UPARROW]
+										[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_UPARROW]].GetSrcRectConst(),
+										vrPos,
+										GetFrontBufferBlend());
+
+	// Render down/right arrow
+
+	vrPos.x = m_vrCachedPos.x + float(m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_DOWNARROW].left);
+	vrPos.y = m_vrCachedPos.y + float(m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_DOWNARROW].top);
+
+	m_rEngine.GetGraphics().RenderQuad(m_Elems[H2D_SCREENSCROLLBAR_ELEM_DOWNARROW]
+										[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_DOWNARROW]].GetTexture()->GetD3DTexture(),
+										 m_Elems[H2D_SCREENSCROLLBAR_ELEM_DOWNARROW]
+										[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_DOWNARROW]].GetSrcRectConst(),
+										 vrPos,
+										 GetFrontBufferBlend());
+
+	// Render thumb elements
+
+	if(IsFlagSet(H2D_SCREENSCROLLBAR_HORIZONTAL) == true)
+	{
+		// Render thumb left
+
+		vrPos.x = m_vrCachedPos.x + float(m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_LEFTARROW].right + m_nThumbPos);
+		vrPos.y = m_vrCachedPos.y;
+
+		m_rEngine.GetGraphics().RenderQuad(m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBLEFT]
+											[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB]].GetTexture()->GetD3DTexture(),
+											 m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBLEFT]
+											[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB]].GetSrcRectConst(),
+											 vrPos,
+											 GetFrontBufferBlend());
+
+		// Render thumb center if needed
+
+		vrPos.x = vrPos.x + float(m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBLEFT]
+								 [m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB]].GetSrcWidth());
+
+		if(m_nThumbSize - m_nMinThumbSize > 0)
+		{
+			m_rEngine.GetGraphics().RenderQuad(m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBCENTER]
+												[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB]].GetTexture()->GetD3DTexture(),
+												 m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBCENTER]
+												[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB]].GetSrcRectConst(),
+												 vrPos,
+												 GetFrontBufferBlend());
+
+			vrPos.x = vrPos.x + float(m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBCENTER]
+									 [m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB]].GetSrcWidth());
+		}
+
+		// Render thumb right
+
+		m_rEngine.GetGraphics().RenderQuad(m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBRIGHT]
+											[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB]].GetTexture()->GetD3DTexture(),
+											 m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBRIGHT]
+											[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB]].GetSrcRectConst(),
+											 vrPos,
+											 GetFrontBufferBlend());
+	}
+	else
+	{
+		// Render thumb top
+
+		vrPos.x = m_vrCachedPos.x;
+		vrPos.y = m_vrCachedPos.y + float(m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_UPARROW].bottom + m_nThumbPos);
+
+		m_rEngine.GetGraphics().RenderQuad(m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBTOP]
+											[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB]].GetTexture()->GetD3DTexture(),
+											 m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBTOP]
+											[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB]].GetSrcRectConst(),
+											 vrPos,
+											 GetFrontBufferBlend());
+
+		// Render thumb center if needed
+
+		vrPos.y = vrPos.y + float(m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBTOP]
+								 [m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB]].GetSrcHeight());
+
+		if(m_nThumbSize - m_nMinThumbSize > 0)
+		{
+			m_rEngine.GetGraphics().RenderQuad(m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBCENTER]
+												[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB]].GetTexture()->GetD3DTexture(),
+												 m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBCENTER]
+												[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB]].GetSrcRectConst(),
+												 vrPos,
+												 GetFrontBufferBlend());
+
+			vrPos.y =
+				vrPos.y + float(m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBCENTER]
+									   [m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB]].GetSrcHeight());
+		}
+
+		// Render thumb bottom
+
+		m_rEngine.GetGraphics().RenderQuad(m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBBOTTOM]
+											[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB]].GetTexture()->GetD3DTexture(),
+											 m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBBOTTOM]
+											[m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB]].GetSrcRectConst(),
+											 vrPos,
+											 GetFrontBufferBlend());
+	}
+}
+
+void CHitman2DScreenScrollBar::Deserialize(const CThunderMLElem& rRoot)
+{
+	CThunderScreen::Deserialize(rRoot);
+
+	// Read scrollbar flags
+
+	const CThunderMLElem* pElem = rRoot.FindChildConst(H2D_SZ_SCREEN_FLAGS);
+
+	if(pElem != NULL)
+		m_dwFlags |= DeserializeFlags(*pElem,
+									  H2D_SZ_SCREENSCROLLBAR_FLAGS,
+									  H2D_DW_SCREENSCROLLBAR_FLAGS,
+									  sizeof(H2D_DW_SCREENSCROLLBAR_FLAGS) /
+										sizeof(DWORD));
+
+	// Read Min
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENSCROLLBAR_MIN,
+								 THU_MLELEM_VALUE,
+								 THU_VAR_INT);
+
+	if(pElem != NULL) m_nMin = pElem->GetIntValue();
+
+	// Read Max
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENSCROLLBAR_MAX,
+								 THU_MLELEM_VALUE,
+								 THU_VAR_INT);
+
+	if(pElem != NULL) m_nMax = pElem->GetIntValue();
+
+	// Read Position
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENSCROLLBAR_POS,
+								 THU_MLELEM_VALUE,
+								 THU_VAR_INT);
+
+	if(pElem != NULL) m_nPos = pElem->GetIntValue();
+
+	// Read Page
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENSCROLLBAR_PAGE,
+								THU_MLELEM_VALUE,
+								THU_VAR_INT);
+
+	if(pElem != NULL) m_nPage = pElem->GetIntValue();
+
+	// Read texture instance for all elements
+
+	if(m_pStyle != NULL)
+	{
+		// Read from style
+
+		WCHAR szElemName[32] = {0};
+
+		for(int n = 0; n < H2D_SCREENSCROLLBAR_ELEM_COUNT; n++)
+		{
+			wcscpy_s(szElemName, 32,
+					IsFlagSet(H2D_SCREENSCROLLBAR_HORIZONTAL) ?
+					H2D_SZ_SCREENSCROLLBAR_ELEMS_HORZ[n] :
+					H2D_SZ_SCREENSCROLLBAR_ELEMS_VERT[n]);
+
+			wcscat_s(szElemName, 32, L".");
+
+			LPWSTR pszElemState = szElemName + wcslen(szElemName);
+			
+			for(int j = 0; j < H2D_SCREENSCROLLBAR_ELEM_STATE_COUNT; j++)
+			{
+				wcscpy_s(pszElemState, 32 - (pszElemState - szElemName),
+						 H2D_SZ_SCREENSCROLLBAR_ELEM_STATES[j]);
+
+				wcscat_s(pszElemState, 32 - (pszElemState - szElemName),
+						L".texture");
+
+				const CThunderTextureInstanceDynamic* pTexInst =
+					m_pStyle->GetTextureInstance(szElemName);
+
+				if(pTexInst != NULL)
+				{
+					// Copy texture instance from style
+
+					m_Elems[n][j] = *pTexInst;
+				}
+				else if(j > 0)
+				{
+					// If this state not specified but the first is specified, copy from previous state
+
+					m_Elems[n][j] = m_Elems[n][j - 1];
+				}
+				else
+				{
+					throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidThemeStyleElement(__FUNCTIONW__, m_strStyle, szElemName));
+				}
+			}
+
+			// Read style settings
+
+			const CThunderVariable* pVar =
+				m_pStyle->GetVariable(H2D_SZ_SCREENSCROLLBAR_WAITARROWAUTOSCROLL,
+									  THU_VAR_FLOAT);
+
+			if(pVar != NULL) m_fWaitArrowAutoScroll = pVar->GetFloatValue();
+
+			pVar = m_pStyle->GetVariable(H2D_SZ_SCREENSCROLLBAR_ARROWAUTOSCROLLINT,
+										 THU_VAR_FLOAT);
+
+			if(pVar != NULL) m_fArrowAutoScrollInterval = pVar->GetFloatValue();
+
+			pVar = m_pStyle->GetVariable(H2D_SZ_SCREENSCROLLBAR_WAITSHAFTAUTOSCROLL,
+										 THU_VAR_FLOAT);
+
+			if(pVar != NULL) m_fWaitShaftAutoScroll = pVar->GetFloatValue();
+
+			pVar = m_pStyle->GetVariable(H2D_SZ_SCREENSCROLLBAR_SHAFTAUTOSCROLLINT,
+										 THU_VAR_FLOAT);
+
+			if(pVar != NULL) m_fShaftAutoScrollInterval = pVar->GetFloatValue();
+		}
+
+		if(IsFlagSet(H2D_SCREENSCROLLBAR_VERTICAL) == true)
+		{
+			m_nMinThumbEdge =
+				m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBTOP]
+					   [H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL].GetSrcHeight();
+
+			m_nMinThumbCenter =
+				m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBCENTER]
+					   [H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL].GetSrcHeight();
+		}
+		else
+		{
+			m_nMinThumbEdge =
+				m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBLEFT]
+					   [H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL].GetSrcWidth();
+
+			m_nMinThumbCenter =
+				m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBCENTER]
+					   [H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL].GetSrcWidth();
+		}
+	}
+	else
+	{
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileFormat(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath()));
+	}
+
+	// Send the first scroll notification
+
+	if(m_pParent != NULL)
+	{
+		m_pParent->OnNotify(H2D_SCREENSCROLLBAR_NOTIFY_SCROLL,
+							this,
+							H2D_SCREENSCROLLBAR_SCROLL_USER);
+	}
+}
+
+DWORD CHitman2DScreenScrollBar::GetMemoryFootprint(void) const
+{
+	return sizeof(CHitman2DScreenScrollBar) - sizeof(CThunderScreen) * 2 +
+		   CThunderScreen::GetMemoryFootprint();
+}
+
+void CHitman2DScreenScrollBar::OnSize(const SIZE& rpsOldSize)
+{
+	if(IsFlagSet(H2D_SCREENSCROLLBAR_VERTICAL) == true)
+	{
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_UPARROW].left = 0;
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_UPARROW].top = 0;
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_UPARROW].right =
+			m_Elems[H2D_SCREENSCROLLBAR_ELEM_UPARROW]
+				   [H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL].GetSrcWidth();
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_UPARROW].bottom =
+			m_Elems[H2D_SCREENSCROLLBAR_ELEM_UPARROW]
+				   [H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL].GetSrcHeight();
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_DOWNARROW].left = 0;
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_DOWNARROW].top = m_psSize.cy -
+			m_Elems[H2D_SCREENSCROLLBAR_ELEM_DOWNARROW]
+				   [H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL].GetSrcHeight();
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_DOWNARROW].right =
+			m_Elems[H2D_SCREENSCROLLBAR_ELEM_DOWNARROW]
+				   [H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL].GetSrcWidth();
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_DOWNARROW].bottom = m_psSize.cy;
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].left = 0;
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].right =
+			m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBLEFT]
+				   [H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL].GetSrcWidth();
+	}
+	else
+	{
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_LEFTARROW].left = 0;
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_LEFTARROW].top = 0;
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_LEFTARROW].right =
+			m_Elems[H2D_SCREENSCROLLBAR_ELEM_LEFTARROW]
+				   [H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL].GetSrcWidth();
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_LEFTARROW].bottom =
+			m_Elems[H2D_SCREENSCROLLBAR_ELEM_LEFTARROW]
+				   [H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL].GetSrcHeight();
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_RIGHTARROW].left = m_psSize.cx -
+			m_Elems[H2D_SCREENSCROLLBAR_ELEM_RIGHTARROW]
+				   [H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL].GetSrcWidth();
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_RIGHTARROW].top = 0;
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_RIGHTARROW].right = m_psSize.cx;
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_RIGHTARROW].bottom =
+			m_Elems[H2D_SCREENSCROLLBAR_ELEM_RIGHTARROW]
+				   [H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL].GetSrcHeight();
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].top = 0;	
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].bottom =
+			m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBLEFT]
+				   [H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL].GetSrcHeight();
+	}
+
+	// Resize shaft
+
+	UpdateShaftSize();
+
+	// Resize thumb
+
+	UpdateThumbSize();
+}
+
+void CHitman2DScreenScrollBar::OnMouseMove(POINT pt)
+{
+	if(H2D_SCREENSCROLLBAR_ELEM_STATE_PUSHED == 
+	   m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB])
+	{
+		// Dragging thumb?
+
+		if(IsFlagSet(H2D_SCREENSCROLLBAR_VERTICAL))
+		{
+			// Calculate new relative position of thumb within the shaft
+
+			m_nThumbPos = pt.y + m_ptDragOffset.y - m_nThumbSize -
+						  m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP].top;
+
+			if(m_nThumbPos < 0)
+			{
+				// Prevent thumb from going through the top of the shaft
+
+				m_nThumbPos = 0;
+			}
+			else if(m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP].top +
+					m_nThumbPos + m_nThumbSize >
+					m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTBOTTOM].bottom)
+			{
+				// Prevent scrollbar from resetting to 0 when dragging down,
+				// and reset to zero when dragged up past limit
+
+				if(pt.y <= 65535 && pt.y >= 60000)
+				{
+					m_nThumbPos = 0;
+				}
+				else
+				{
+					m_nThumbPos =
+						m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTBOTTOM].bottom -
+						m_nThumbSize -
+						m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP].top;
+				}
+			}
+
+			// Update thumb
+
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].left = 0;
+
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].top =
+				m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP].top + m_nThumbPos;
+
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].right =
+				m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP].right;
+
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].bottom =
+				m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP].top +
+				m_nThumbPos + m_nThumbSize;
+
+			// Re-render if buffered
+
+			Invalidate();
+		}
+		else
+		{
+			// Calculate new relative position of thumb within the shaft
+
+			m_nThumbPos = pt.x + m_ptDragOffset.x - m_nThumbSize -
+						  m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT].left;
+
+			if(m_nThumbPos < 0)
+			{
+				// Prevent thumb from going through the left of the shaft
+
+				m_nThumbPos = 0;
+			}
+			else if(m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT].left +
+					m_nThumbPos + m_nThumbSize >
+					m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTRIGHT].right)
+			{
+				// Prevent scrollbar from resetting to 0 when dragging right,
+				// and reset to zero when dragged left past limit
+
+				if(pt.x <= 65535 && pt.x >= 60000)
+				{
+					m_nThumbPos = 0;
+				}
+				else
+				{
+					m_nThumbPos =
+						m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTRIGHT].right -
+						m_nThumbSize -
+						m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT].left;
+				}
+			}
+
+			// Update thumb
+
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].left =
+				m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT].left +
+				m_nThumbPos;
+
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].top = 0;
+
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].right =
+				m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT].left +
+				m_nThumbPos + m_nThumbSize;
+
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].bottom =
+				m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT].bottom;
+		}
+
+		UpdatePositionFromThumb();
+
+		// Re-render if buffered
+
+		Invalidate();
+	}
+	else if(H2D_SCREENSCROLLBAR_ELEM_STATE_PUSHED ==
+			m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP] ||
+			H2D_SCREENSCROLLBAR_ELEM_STATE_PUSHED ==
+			m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTBOTTOM])
+	{
+		// Scrolling with shaft. Update drag offset
+
+		m_ptDragOffset.x = pt.x;
+		m_ptDragOffset.y = pt.y;
+
+		// Re-render if buffered
+
+		Invalidate();
+	}
+	else
+	{
+		// If not dragging thumb, update states for all elements in response to mouse
+
+		H2D_SCREENSCROLLBAR_HITTEST nHit = HitTest(pt);
+
+		for(int nHitElem = 0;
+			nHitElem < H2D_SCREENSCROLLBAR_HIT_COUNT;
+			nHitElem++)
+		{
+			if(nHitElem == nHit)
+			{
+				// Mouse is over this element
+
+				if(true == m_bMouseDown)
+				{
+					if(m_nHitOnMouseDown == nHit)
+					{
+						// If mouse was pushed down on this element,
+						// set its state to pushed
+
+						m_nElemStates[nHitElem] =
+							H2D_SCREENSCROLLBAR_ELEM_STATE_PUSHED;
+					}
+					else
+					{
+						// If mouse was not pushed down on this element,
+						// set its state to hover
+
+						m_nElemStates[nHitElem] =
+							H2D_SCREENSCROLLBAR_ELEM_STATE_HOVER;
+					}
+				}
+				else
+				{
+					// If mouse was never pushed down,
+					// set element state to hover
+
+					m_nElemStates[nHitElem] = H2D_SCREENSCROLLBAR_ELEM_STATE_HOVER;
+				}
+			}
+			else
+			{
+				// Mouse is not over this element, set its state to normal
+
+				m_nElemStates[nHitElem] = H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL;
+			}
+		}
+
+		// Re-render if buffered
+
+		Invalidate();
+	}
+}
+
+void CHitman2DScreenScrollBar::OnMouseLDbl(POINT pt)
+{
+	return OnMouseLDown(pt);
+}
+
+void CHitman2DScreenScrollBar::OnMouseLDown(POINT pt)
+{
+	Activate();
+
+	m_bMouseDown = true;
+
+	m_nHitOnMouseDown = HitTest(pt);
+
+	switch(m_nHitOnMouseDown)
+	{
+	case H2D_SCREENSCROLLBAR_HIT_LEFTARROW:
+		{
+			m_nElemStates[H2D_SCREENSCROLLBAR_HIT_LEFTARROW] =
+				H2D_SCREENSCROLLBAR_ELEM_STATE_PUSHED;
+
+			m_rEngine.GetTimers().Add(this,
+									  m_fWaitArrowAutoScroll,
+									  TIMER_WAITARROW);
+
+			if(m_nPos > m_nMin)
+			{
+				m_nPos--;
+				UpdateThumbFromPosition();
+
+				if(m_pParent != NULL)
+				{
+					m_pParent->OnNotify(H2D_SCREENSCROLLBAR_NOTIFY_SCROLL,
+										this,
+										H2D_SCREENSCROLLBAR_SCROLL_ARROW);
+				}
+			}
+
+			// Capture the mouse so we get a mouse-up event for sure
+
+			m_rEngine.GetScreens().SetCaptureScreen(this);
+
+			// Invalidate if buffered
+
+			Invalidate();
+		}
+		break;
+	case H2D_SCREENSCROLLBAR_HIT_RIGHTARROW:
+		{
+			m_nElemStates[H2D_SCREENSCROLLBAR_HIT_RIGHTARROW] =
+				H2D_SCREENSCROLLBAR_ELEM_STATE_PUSHED;
+
+			m_rEngine.GetTimers().Add(this,
+									  m_fWaitArrowAutoScroll,
+									  TIMER_WAITARROW);
+
+			if(m_nPos < m_nMax)
+			{
+				m_nPos++;
+				UpdateThumbFromPosition();
+
+				if(m_pParent != NULL)
+				{
+					m_pParent->OnNotify(H2D_SCREENSCROLLBAR_NOTIFY_SCROLL,
+										this,
+										H2D_SCREENSCROLLBAR_SCROLL_ARROW);
+				}
+			}
+
+			// Capture the mouse so we get a mouse-up event for sure
+
+			m_rEngine.GetScreens().SetCaptureScreen(this);
+
+			// Invalidate if buffered
+
+			Invalidate();
+		}
+		break;
+	case H2D_SCREENSCROLLBAR_HIT_THUMB:
+		{
+			m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB] =
+				H2D_SCREENSCROLLBAR_ELEM_STATE_PUSHED;
+
+			m_ptDragOffset.x =
+				m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].right - pt.x;
+
+			m_ptDragOffset.y =
+				m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].bottom - pt.y;
+
+			// Capture the mouse so we get a mouse-up event for sure
+
+			m_rEngine.GetScreens().SetCaptureScreen(this);
+
+			// Invalidate if buffered
+
+			Invalidate();
+		}
+		break;
+	case H2D_SCREENSCROLLBAR_HIT_SHAFTTOP:
+	case H2D_SCREENSCROLLBAR_HIT_SHAFTBOTTOM:
+		{
+			m_nElemStates[m_nHitOnMouseDown] =
+				H2D_SCREENSCROLLBAR_ELEM_STATE_PUSHED;
+
+			// Set the offset
+
+			m_ptDragOffset.x = pt.x;
+			m_ptDragOffset.y = pt.y;
+
+			// Scroll for the first time
+
+			ScrollShaft();
+
+			// Set the timer to wait before shaft auto-scrolling begins
+
+			m_rEngine.GetTimers().Add(this,
+									  m_fWaitShaftAutoScroll,
+									  TIMER_WAITSHAFT);
+
+			// Capture the mouse so we get a mouse-up event for sure
+
+			m_rEngine.GetScreens().SetCaptureScreen(this);
+
+			// Invalidate if buffered
+
+			Invalidate();
+		}
+		break;
+	}	
+}
+
+void CHitman2DScreenScrollBar::OnMouseLUp(POINT pt)
+{
+	m_bMouseDown = false;
+
+	switch(m_nHitOnMouseDown)
+	{
+	case H2D_SCREENSCROLLBAR_HIT_LEFTARROW:
+		{
+			if(HitTest(pt) == H2D_SCREENSCROLLBAR_ELEM_LEFTARROW)
+			{
+				m_nElemStates[H2D_SCREENSCROLLBAR_HIT_LEFTARROW] =
+					H2D_SCREENSCROLLBAR_ELEM_STATE_HOVER;
+			}
+			else
+			{
+				m_nElemStates[H2D_SCREENSCROLLBAR_HIT_LEFTARROW] =
+					H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL;
+			}
+
+			m_rEngine.GetTimers().Remove(this, TIMER_WAITARROW);
+
+			if(m_pTimerAutoScroll != NULL)
+			{
+				m_rEngine.GetTimers().Remove(this, TIMER_ARROW);
+				m_pTimerAutoScroll = NULL;
+			}
+
+			// Invalidate if buffered
+
+			Invalidate();
+		}
+		break;
+	case H2D_SCREENSCROLLBAR_HIT_RIGHTARROW:
+		{
+			if(HitTest(pt) == H2D_SCREENSCROLLBAR_HIT_RIGHTARROW)
+			{
+				m_nElemStates[H2D_SCREENSCROLLBAR_HIT_RIGHTARROW] =
+					H2D_SCREENSCROLLBAR_ELEM_STATE_HOVER;
+			}
+			else
+			{
+				m_nElemStates[H2D_SCREENSCROLLBAR_HIT_RIGHTARROW] =
+					H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL;
+			}
+
+			m_rEngine.GetTimers().Remove(this, TIMER_WAITARROW);
+
+			if(m_pTimerAutoScroll != NULL)
+			{
+				m_rEngine.GetTimers().Remove(this, TIMER_ARROW);
+				m_pTimerAutoScroll = NULL;
+			}
+
+			// Invalidate if buffered
+
+			Invalidate();
+		}
+		break;
+	case H2D_SCREENSCROLLBAR_HIT_THUMB:
+		{
+			if(HitTest(pt) == H2D_SCREENSCROLLBAR_HIT_THUMB)
+			{
+				m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB] =
+					H2D_SCREENSCROLLBAR_ELEM_STATE_HOVER;
+			}
+			else
+			{
+				m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB] =
+					H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL;
+			}
+
+			// Invalidate if buffered
+
+			Invalidate();
+		}
+		break;
+	case H2D_SCREENSCROLLBAR_HIT_SHAFTTOP:
+	case H2D_SCREENSCROLLBAR_HIT_SHAFTBOTTOM:
+		{
+			if(HitTest(pt) == m_nHitOnMouseDown)
+			{
+				m_nElemStates[m_nHitOnMouseDown] =
+					H2D_SCREENSCROLLBAR_ELEM_STATE_HOVER;
+			}
+			else
+			{
+				m_nElemStates[m_nHitOnMouseDown] =
+					H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL;
+			}
+
+			m_rEngine.GetTimers().Remove(this, TIMER_WAITSHAFT);
+
+			if(m_pTimerAutoScroll != NULL)
+			{
+				m_rEngine.GetTimers().Remove(this, TIMER_SHAFT);
+				m_pTimerAutoScroll = NULL;
+			}
+
+			// Invalidate if buffered
+
+			Invalidate();
+		}
+		break;
+	}
+
+	// Release mouse capture
+
+	if(m_rEngine.GetScreens().GetCaptureScreen() == this)
+		m_rEngine.GetScreens().SetCaptureScreen(NULL);
+}
+
+void CHitman2DScreenScrollBar::OnMouseLeave(void)
+{
+	// If dragging thumb or scrolling shaft, don't do anything
+
+	if(m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB] ==
+		H2D_SCREENSCROLLBAR_ELEM_STATE_PUSHED ||
+	   m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP] ==
+		H2D_SCREENSCROLLBAR_ELEM_STATE_PUSHED ||
+	   m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTBOTTOM] ==
+		H2D_SCREENSCROLLBAR_ELEM_STATE_PUSHED)
+	{
+		return;
+	}
+
+	// Set all element states to normal
+
+	for(int nHitElem = 0;
+		nHitElem < H2D_SCREENSCROLLBAR_HIT_COUNT;
+		nHitElem++)
+	{
+		m_nElemStates[nHitElem] = H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL;
+	}
+
+	// Invalidate if buffered
+
+	Invalidate();
+}
+
+void CHitman2DScreenScrollBar::OnTimer(CThunderTimer& rTimer)
+{
+	switch(rTimer.GetID())
+	{
+	case TIMER_WAITARROW:
+		{
+			// Waiting for arrow auto-scroll is over, start arrow auto-scroll timer
+
+			m_rEngine.GetTimers().Remove(this, TIMER_WAITARROW);
+
+			if(NULL == m_pTimerAutoScroll)
+			{
+				m_pTimerAutoScroll =
+					m_rEngine.GetTimers().Add(this,
+											  m_fArrowAutoScrollInterval,
+											  TIMER_ARROW);
+			}
+		}
+		break;
+	case TIMER_ARROW:
+		{
+			// Perform auto-scrolling
+
+			if(m_nElemStates[H2D_SCREENSCROLLBAR_HIT_LEFTARROW] ==
+			   H2D_SCREENSCROLLBAR_ELEM_STATE_PUSHED)
+			{
+				if(m_nPos > m_nMin)
+				{
+					m_nPos--;
+
+					UpdateThumbFromPosition();
+
+					if(m_pParent != NULL)
+					{
+						m_pParent->OnNotify(H2D_SCREENSCROLLBAR_NOTIFY_SCROLL,
+											this,
+											H2D_SCREENSCROLLBAR_SCROLL_ARROW);
+					}
+				}
+			}
+			else if(m_nElemStates[H2D_SCREENSCROLLBAR_HIT_RIGHTARROW] ==
+					H2D_SCREENSCROLLBAR_ELEM_STATE_PUSHED)
+			{
+				if(m_nPos < m_nMax)
+				{
+					m_nPos++;
+
+					UpdateThumbFromPosition();
+
+					if(m_pParent != NULL)
+					{
+						m_pParent->OnNotify(H2D_SCREENSCROLLBAR_NOTIFY_SCROLL,
+											this,
+											H2D_SCREENSCROLLBAR_SCROLL_ARROW);
+					}
+				}
+			}
+
+			// Invalidate if buffered
+
+			Invalidate();
+		}
+		break;
+	case TIMER_WAITSHAFT:
+		{
+			// Waiting for shaft auto-scroll is over, start shaft auto-scroll timer
+
+			m_rEngine.GetTimers().Remove(this, TIMER_WAITSHAFT);
+
+			if(NULL == m_pTimerAutoScroll)
+			{
+				m_pTimerAutoScroll =
+					m_rEngine.GetTimers().Add(this,
+											  m_fShaftAutoScrollInterval,
+											  TIMER_SHAFT);
+			}
+		}
+		break;
+	case TIMER_SHAFT:
+		{
+			// Perform auto-scrolling
+
+			ScrollShaft();
+		}
+		break;
+	}
+}
+
+void CHitman2DScreenScrollBar::UpdateThumbFromPosition(void)
+{
+	// Update thumb placement based on value in range
+
+	m_nThumbPos = int(m_fPixelsPerUnit * float(m_nPos - m_nMin));
+
+	if(IsFlagSet(H2D_SCREENSCROLLBAR_VERTICAL) == true)
+	{
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].top =
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_UPARROW].bottom + m_nThumbPos;
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].bottom =
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].top + m_nThumbSize;
+	}
+	else
+	{
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].left =
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_LEFTARROW].right + m_nThumbPos;
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].right =
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].left + m_nThumbSize;
+	}
+
+	// Update shaft part sizes
+
+	UpdateShaftSplit();
+}
+
+void CHitman2DScreenScrollBar::UpdateThumbSize(void)
+{
+	// Calculate min thumb size
+
+	if(IsFlagSet(H2D_SCREENSCROLLBAR_VERTICAL) == true)
+	{
+		m_nMinThumbSize =
+			m_nMinThumbEdge + m_nMinThumbCenter +
+			m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBBOTTOM]
+				   [m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB]].GetSrcHeight();
+	}
+	else
+	{
+		m_nMinThumbSize =
+			m_nMinThumbEdge + m_nMinThumbCenter +
+			m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBRIGHT]
+				   [m_nElemStates[H2D_SCREENSCROLLBAR_HIT_THUMB]].GetSrcWidth();
+	}
+
+	// Calculate thumb size based on items-per-page
+
+	m_nThumbSize = int(float(m_nShaftSize) * float(m_nPage) / float(m_nMax - m_nMin));
+	
+	// Clamp to bounds
+
+	if(m_nThumbSize < m_nMinThumbSize)
+		m_nThumbSize = m_nMinThumbSize;
+	else if(m_nThumbSize > m_nShaftSize)
+		m_nThumbSize = m_nShaftSize;
+
+	// Calculate pixels per unit, within space actually available for scrolling
+
+	m_fPixelsPerUnit = float(m_nShaftSize - m_nThumbSize) / float(m_nMax - m_nMin);
+
+	// Make sure thumb cannot go beyond the shaft and comes close enough to the end of shaft
+	// This counteracts rounding errors
+
+	if(m_nThumbSize > m_nMinThumbSize)
+	{
+		int nMaxPos = int(float(m_nMax - m_nMin) * m_fPixelsPerUnit);
+
+		if(IsFlagSet(H2D_SCREENSCROLLBAR_VERTICAL) == true)
+		{		
+			if((m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP].top +
+				nMaxPos + m_nThumbSize) >
+				m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTBOTTOM].bottom)
+			{
+				m_nThumbSize--;
+			}
+			else if((m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP].top +
+				nMaxPos + m_nThumbSize) <
+				m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTBOTTOM].bottom)
+			{
+				m_nThumbSize++;
+			}
+		}
+		else
+		{		
+			if((m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT].left +
+				nMaxPos + m_nThumbSize) >
+				m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTRIGHT].right)
+			{
+				m_nThumbSize--;
+			}
+			else if((m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT].left +
+				nMaxPos + m_nThumbSize) <
+				m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTRIGHT].right)
+			{
+				m_nThumbSize++;
+			}
+		}
+	}
+
+	// Resize thumb for all states
+
+	m_nThumbCenter = m_nThumbSize - m_nMinThumbSize;
+
+	if(m_nThumbCenter > 0)
+	{
+		int nDistributeEdge = m_nThumbCenter / 2;
+		int nDistributeCenter = m_nThumbCenter - nDistributeEdge;
+
+		if(IsFlagSet(H2D_SCREENSCROLLBAR_VERTICAL) == true)
+		{
+			for(int nState = H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL;
+				nState < H2D_SCREENSCROLLBAR_ELEM_STATE_COUNT;
+				nState++)
+			{
+				m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBTOP]
+					   [nState].GetSrcRect().bottom =
+					m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBTOP]
+						   [nState].GetSrcRect().top +
+					m_nMinThumbEdge + nDistributeEdge;
+
+				m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBCENTER]
+					   [nState].GetSrcRect().bottom =
+					m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBCENTER]
+						   [nState].GetSrcRect().top +
+					m_nMinThumbCenter + nDistributeCenter;
+			}
+		}
+		else
+		{
+			for(int nState = H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL;
+				nState < H2D_SCREENSCROLLBAR_ELEM_STATE_COUNT;
+				nState++)
+			{
+				m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBLEFT]
+					   [nState].GetSrcRect().right =
+					m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBLEFT]
+						   [nState].GetSrcRect().left +
+					m_nMinThumbEdge + nDistributeEdge;
+
+				m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBCENTER]
+					   [nState].GetSrcRect().right =
+					m_Elems[H2D_SCREENSCROLLBAR_ELEM_THUMBCENTER]
+						   [nState].GetSrcRect().left +
+					m_nMinThumbCenter + nDistributeCenter;
+			}
+		}
+	}
+
+	// Update thumb position, because pixels-per-unit ratio depends on thumb size
+
+	UpdateThumbFromPosition();
+}
+
+void CHitman2DScreenScrollBar::UpdateShaftSize(void)
+{
+	if(IsFlagSet(H2D_SCREENSCROLLBAR_VERTICAL) == true)
+	{
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP].left = 0;
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP].top =
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_UPARROW].bottom;
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP].right =
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_UPARROW].right;
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTBOTTOM].left = 0;
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTBOTTOM].right =
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP].right;
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTBOTTOM].bottom =
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_DOWNARROW].top;
+
+		m_nShaftSize = m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_DOWNARROW].top -
+					   m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_UPARROW].bottom;
+	}
+	else
+	{
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT].left =
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_LEFTARROW].right;
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT].top = 0;
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT].bottom =
+			m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTLEFT]
+				   [H2D_SCREENSCROLLBAR_ELEM_STATE_NORMAL].GetSrcHeight();
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTRIGHT].top = 0;
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTRIGHT].right =
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_RIGHTARROW].left;
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTRIGHT].bottom =
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT].bottom;
+
+		m_nShaftSize = m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_RIGHTARROW].left -
+					   m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_LEFTARROW].right;
+	}
+}
+
+void CHitman2DScreenScrollBar::UpdateShaftSplit(void)
+{
+	// Update the two parts of shaft to always split along thumb position
+
+	if(IsFlagSet(H2D_SCREENSCROLLBAR_VERTICAL) == true)
+	{
+		// Update hit test rectangles
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP].bottom =
+			m_nThumbPos +
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_UPARROW].bottom -
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_UPARROW].top;
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTBOTTOM].top =
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP].bottom;
+
+		// Update sizes
+
+		m_nShaftPartsSize[0] =
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP].bottom -
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP].top +
+			m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTTOP]
+				   [m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP]].GetSrcHeight() +
+			m_nThumbCenter;
+
+		m_nShaftPartsSize[1] =
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTBOTTOM].bottom -
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTBOTTOM].top +
+			m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTBOTTOM]
+				   [m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTBOTTOM]].GetSrcHeight() -
+			m_nThumbCenter;
+	}
+	else
+	{
+		// Update hit test rectangles
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT].right =
+			m_nThumbPos + m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_LEFTARROW].right -
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_LEFTARROW].left;
+
+		m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTRIGHT].left =
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT].right;
+
+		// Update sizes
+
+		m_nShaftPartsSize[0] =
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT].right -
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT].left +
+			m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTLEFT]
+				   [m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT]].GetSrcWidth() +
+			m_nThumbCenter;
+
+		m_nShaftPartsSize[1] =
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTRIGHT].right -
+			m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTRIGHT].left +
+			m_Elems[H2D_SCREENSCROLLBAR_ELEM_SHAFTRIGHT]
+				   [m_nElemStates[H2D_SCREENSCROLLBAR_HIT_SHAFTRIGHT]].GetSrcWidth() -
+			m_nThumbCenter;
+	}
+}
+
+void CHitman2DScreenScrollBar::UpdatePositionFromThumb(void)
+{
+	// Calculate relative position based on relative thumb position within the shaft
+
+	int nNewRelPos = int(float(m_nThumbPos + 1) / m_fPixelsPerUnit);
+
+	// If position is non-zero when it should be zero (due to round-off errors),
+	// force it to be zero
+
+	if(IsFlagSet(H2D_SCREENSCROLLBAR_VERTICAL) == true)
+	{
+		if(nNewRelPos > 0 &&
+		   (m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].top ==
+		   m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTTOP].top))
+		{
+			nNewRelPos = 0;
+		}
+	}
+	else
+	{
+		if(nNewRelPos > 0 &&
+		   (m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].left ==
+		   m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_SHAFTLEFT].left))
+		{
+			nNewRelPos = 0;
+		}
+	}
+
+	// Clamp to relative range
+
+	if(nNewRelPos > (m_nMax - m_nMin))
+		nNewRelPos = m_nMax - m_nMin;
+	else if(nNewRelPos < 0)
+		nNewRelPos = 0;
+
+	// Translate into absolute position
+
+	m_nPos = nNewRelPos + m_nMin;
+
+	// Update shaft part sizes
+
+	UpdateShaftSplit();
+}
+
+void CHitman2DScreenScrollBar::ScrollShaft(void)
+{
+	// Scroll page-by-page (or less) until thumb reaches desired position on shaft
+
+	int nDelta = 0;
+
+	if(IsFlagSet(H2D_SCREENSCROLLBAR_VERTICAL) == true)
+	{
+		if(m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].top < m_ptDragOffset.y)
+		{
+			// Desired position is below the thumb, so move thumb down
+			
+			nDelta = int(float(m_ptDragOffset.y -
+						 m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].top) /
+						 m_fPixelsPerUnit);
+
+			if(nDelta > m_nPage)
+				nDelta = m_nPage;
+			else if(!nDelta)
+				return;
+
+			m_nPos += nDelta;
+
+			if(m_nPos > m_nMax) m_nPos = m_nMax;
+
+			UpdateThumbFromPosition();
+
+			if(m_pParent != NULL)
+			{
+				m_pParent->OnNotify(H2D_SCREENSCROLLBAR_NOTIFY_SCROLL,
+									this,
+									H2D_SCREENSCROLLBAR_SCROLL_THUMB);
+			}
+		}
+		else if(m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].top > m_ptDragOffset.y)
+		{
+			// Desired position is above the thumb, so move thumb up
+
+			nDelta = int(float(m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].top -
+						 m_ptDragOffset.y) / m_fPixelsPerUnit);
+
+			if(nDelta > m_nPage)
+				nDelta = m_nPage;
+			else if(!nDelta)
+				return;
+
+			m_nPos -= nDelta;
+
+			if(m_nPos < m_nMin) m_nPos = m_nMin;
+
+			UpdateThumbFromPosition();
+
+			if(m_pParent != NULL)
+			{
+				m_pParent->OnNotify(H2D_SCREENSCROLLBAR_NOTIFY_SCROLL,
+									this,
+									H2D_SCREENSCROLLBAR_SCROLL_THUMB);
+			}
+		}
+	}
+	else
+	{
+		if(m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].left < m_ptDragOffset.x)
+		{
+			// Desired position is to the right of thumb, so move thumb right
+
+			nDelta = int(float(m_ptDragOffset.x -
+						 m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].left) /
+						 m_fPixelsPerUnit);
+
+			if(nDelta > m_nPage)
+				nDelta = m_nPage;
+			else if(!nDelta)
+				return;
+
+			m_nPos += nDelta;
+
+			if(m_nPos > m_nMax) m_nPos = m_nMax;
+
+			UpdateThumbFromPosition();
+
+			if(m_pParent != NULL)
+			{
+				m_pParent->OnNotify(H2D_SCREENSCROLLBAR_NOTIFY_SCROLL,
+									this,
+									H2D_SCREENSCROLLBAR_SCROLL_THUMB);
+			}
+		}
+		else if(m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].left > m_ptDragOffset.x)
+		{
+			// Desired position is to the left of thumb, so move thumb left
+
+			nDelta = int(float(m_rcHitTest[H2D_SCREENSCROLLBAR_HIT_THUMB].left -
+						 m_ptDragOffset.x) / m_fPixelsPerUnit);
+
+			if(nDelta > m_nPage)
+				nDelta = m_nPage;
+			else if(!nDelta)
+				return;
+
+			m_nPos -= nDelta;
+
+			if(m_nPos < m_nMin) m_nPos = m_nMin;
+
+			UpdateThumbFromPosition();
+
+			if(m_pParent != NULL)
+			{
+				m_pParent->OnNotify(H2D_SCREENSCROLLBAR_NOTIFY_SCROLL,
+									this,
+									H2D_SCREENSCROLLBAR_SCROLL_THUMB);
+			}
+		}
+	}
+
+	// Invalidate if buffered
+
+	Invalidate();
+}
+
+H2D_SCREENSCROLLBAR_HITTEST CHitman2DScreenScrollBar::HitTest(POINT pt)
+{
+	for(int n = 0; n < H2D_SCREENSCROLLBAR_ELEM_COUNT; n++)
+	{
+		if(PtInRect(&m_rcHitTest[n], pt))
+			return (H2D_SCREENSCROLLBAR_HITTEST)n;
+	}
+	
+	return H2D_SCREENSCROLLBAR_HIT_COUNT;
+}
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenFrame implementation
+\*----------------------------------------------------------*/
+
+CHitman2DScreenFrame::CHitman2DScreenFrame(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent):
+										   CThunderScreen(rEngine, pszClass, pParent),
+										   m_vrTopRight(0.0f, 0.0f, 0.0f),
+										   m_vrBottomRight(0.0f, 0.0f, 0.0f),
+										   m_vrCenter(0.0f, 0.0f, 0.0f)
+{
+}
+
+CHitman2DScreenFrame::~CHitman2DScreenFrame(void)
+{
+}
+
+CHitman2DScreenFrame* CHitman2DScreenFrame::CreateInstance(CThunderEngine& rEngine,
+														   LPCWSTR pszClass,
+														   CThunderScreen* pParent)
+{
+	return new CHitman2DScreenFrame(rEngine, pszClass, pParent);
+}
+
+CThunderTextureInstanceDynamic& CHitman2DScreenFrame::GetBackground(H2D_SCREENFRAME_ELEMENTS nElem)
+{
+	return m_Elements[nElem];
+}
+
+const CThunderTextureInstanceDynamic& CHitman2DScreenFrame::GetBackgroundConst(H2D_SCREENFRAME_ELEMENTS nElem) const
+{
+	return m_Elements[nElem];
+}
+
+void CHitman2DScreenFrame::OnRender(LPCRECT prc)
+{
+	// Render Top Left
+
+	m_rEngine.GetGraphics().RenderQuad(m_Elements[H2D_SCREENFRAME_ELEMENT_TOPLEFT].GetTexture()->GetD3DTexture(),
+									   m_Elements[H2D_SCREENFRAME_ELEMENT_TOPLEFT].GetSrcRectConst(),
+									   m_vrCachedPos,
+									   GetFrontBufferBlend());
+
+	// Render Top Right
+
+	m_rEngine.GetGraphics().RenderQuad(m_Elements[H2D_SCREENFRAME_ELEMENT_TOPRIGHT].GetTexture()->GetD3DTexture(),
+										 m_Elements[H2D_SCREENFRAME_ELEMENT_TOPRIGHT].GetSrcRectConst(),
+										 m_vrTopRight,
+										 GetFrontBufferBlend());
+
+	// Render Bottom Right
+
+	m_rEngine.GetGraphics().RenderQuad(m_Elements[H2D_SCREENFRAME_ELEMENT_BOTTOMRIGHT].GetTexture()->GetD3DTexture(),
+									   m_Elements[H2D_SCREENFRAME_ELEMENT_BOTTOMRIGHT].GetSrcRectConst(),
+									   m_vrBottomRight,
+									   GetFrontBufferBlend());
+
+	// Render Bottom Left
+
+	m_rEngine.GetGraphics().RenderQuad(m_Elements[H2D_SCREENFRAME_ELEMENT_BOTTOMLEFT].GetTexture()->GetD3DTexture(),
+									   m_Elements[H2D_SCREENFRAME_ELEMENT_BOTTOMLEFT].GetSrcRectConst(),
+									   D3DXVECTOR3(m_vrCachedPos.x, m_vrBottomRight.y, 0.0f),
+									   GetFrontBufferBlend());
+	// Render Center
+
+	m_rEngine.GetGraphics().RenderQuad(m_Elements[H2D_SCREENFRAME_ELEMENT_CENTER].GetTexture()->GetD3DTexture(),
+									   m_Elements[H2D_SCREENFRAME_ELEMENT_CENTER].GetSrcRectConst(),
+									   m_vrCenter,
+									   GetFrontBufferBlend());
+	// Render Left
+
+	m_rEngine.GetGraphics().RenderQuad(m_Elements[H2D_SCREENFRAME_ELEMENT_LEFT].GetTexture()->GetD3DTexture(),
+									   m_Elements[H2D_SCREENFRAME_ELEMENT_LEFT].GetSrcRectConst(),
+									   D3DXVECTOR3(m_vrCachedPos.x, m_vrCenter.y, 0.0f),
+									   GetFrontBufferBlend());
+
+	// Render Top
+
+	m_rEngine.GetGraphics().RenderQuad(m_Elements[H2D_SCREENFRAME_ELEMENT_TOP].GetTexture()->GetD3DTexture(),
+										m_Elements[H2D_SCREENFRAME_ELEMENT_TOP].GetSrcRectConst(),
+										D3DXVECTOR3(m_vrCenter.x, m_vrCachedPos.y, 0.0f),
+										GetFrontBufferBlend());
+
+	// Render Right
+
+	m_rEngine.GetGraphics().RenderQuad(m_Elements[H2D_SCREENFRAME_ELEMENT_RIGHT].GetTexture()->GetD3DTexture(),
+									   m_Elements[H2D_SCREENFRAME_ELEMENT_RIGHT].GetSrcRectConst(),
+									   D3DXVECTOR3(m_vrTopRight.x, m_vrCenter.y, 0.0f),
+									   GetFrontBufferBlend());
+
+	// Render Bottom
+
+	m_rEngine.GetGraphics().RenderQuad(m_Elements[H2D_SCREENFRAME_ELEMENT_BOTTOM].GetTexture()->GetD3DTexture(),
+										m_Elements[H2D_SCREENFRAME_ELEMENT_BOTTOM].GetSrcRectConst(),
+										D3DXVECTOR3(m_vrCenter.x, m_vrBottomRight.y, 0.0f),
+										GetFrontBufferBlend());
+
+	// Render everything else
+
+	CThunderScreen::OnRender(prc);
+}
+
+void CHitman2DScreenFrame::Deserialize(const CThunderMLElem& rRoot)
+{
+	CThunderScreen::Deserialize(rRoot);
+
+	// Read specific flags
+
+	const CThunderMLElem* pElem = rRoot.FindChildConst(H2D_SZ_SCREEN_FLAGS);
+
+	if(pElem != NULL)
+	{
+		SetFlags(m_dwFlags |
+				 DeserializeFlags(*pElem,
+								  H2D_SZ_SCREENFRAME_FLAGS,
+								  H2D_DW_SCREENFRAME_FLAGS,
+								  sizeof(H2D_DW_SCREENFRAME_FLAGS) / sizeof(DWORD)));
+	}
+
+	// Read elements from style (inline not implemented)
+
+	if(m_pStyle != NULL)
+	{
+		for(int n = 0; n < H2D_SCREENFRAME_ELEMENT_COUNT; n++)
+		{
+			const CThunderTextureInstanceDynamic* pTexInst =
+				m_pStyle->GetTextureInstance(H2D_SZ_SCREENFRAME_ELEMENTS[n]);
+
+			if(NULL == pTexInst)
+				throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidThemeStyleElement(__FUNCTIONW__, m_strStyle, H2D_SZ_SCREENFRAME_ELEMENTS[n]));
+
+			m_Elements[n] = *pTexInst;
+		}		
+	}
+}
+
+DWORD CHitman2DScreenFrame::GetMemoryFootprint(void) const
+{
+	return sizeof(CHitman2DScreenFrame) - sizeof(CThunderScreen) * 2 +
+		   CThunderScreen::GetMemoryFootprint();
+}
+
+void CHitman2DScreenFrame::OnMove(const POINT& ptOldPosition)
+{
+	// Recalculate Top Right
+
+	m_vrTopRight.x = m_vrCachedPos.x +
+					 float(m_psSize.cx -
+					 m_Elements[H2D_SCREENFRAME_ELEMENT_TOPLEFT].GetSrcWidth());
+
+	m_vrTopRight.y = m_vrCachedPos.y;
+
+	// Recalculate Bottom Right
+
+	m_vrBottomRight.x = m_vrTopRight.x;
+
+	m_vrBottomRight.y = m_vrCachedPos.y +
+						float(m_psSize.cy -
+						m_Elements[H2D_SCREENFRAME_ELEMENT_TOPRIGHT].GetSrcHeight());
+
+	// Recalculate Center
+
+	m_vrCenter.x = float(m_vrCachedPos.x +
+				   m_Elements[H2D_SCREENFRAME_ELEMENT_TOPLEFT].GetSrcWidth());
+
+	m_vrCenter.y = float(m_vrCachedPos.y +
+				   m_Elements[H2D_SCREENFRAME_ELEMENT_TOPLEFT].GetSrcHeight());
+}
+
+void CHitman2DScreenFrame::OnSize(const SIZE& psOldSize)
+{
+	if(IsFlagSet(H2D_SCREENFRAME_AUTOSIZE) == true && m_pParent != NULL)
+	{
+		if(m_pParent->GetSize().cx != m_psSize.cx ||
+		   m_pParent->GetSize().cy != m_psSize.cy)
+		{
+			SetSize(m_pParent->GetSize());
+			return;
+		}
+	}
+
+	// Update Top texture coordinates
+
+	m_Elements[H2D_SCREENFRAME_ELEMENT_TOP].GetSrcRect().right =
+		m_Elements[H2D_SCREENFRAME_ELEMENT_TOP].GetSrcRect().left +
+		m_psSize.cx - m_Elements[H2D_SCREENFRAME_ELEMENT_TOPLEFT].GetSrcWidth() -
+		m_Elements[H2D_SCREENFRAME_ELEMENT_TOPRIGHT].GetSrcWidth();
+
+	// Update Bottom texture coordinates
+
+	m_Elements[H2D_SCREENFRAME_ELEMENT_BOTTOM].GetSrcRect().right =
+		m_Elements[H2D_SCREENFRAME_ELEMENT_BOTTOM].GetSrcRectConst().left +
+		m_psSize.cx - m_Elements[H2D_SCREENFRAME_ELEMENT_BOTTOMLEFT].GetSrcWidth() -
+		m_Elements[H2D_SCREENFRAME_ELEMENT_BOTTOMRIGHT].GetSrcWidth();
+
+	// Update Left texture coordinates
+
+	m_Elements[H2D_SCREENFRAME_ELEMENT_LEFT].GetSrcRect().bottom =
+		m_Elements[H2D_SCREENFRAME_ELEMENT_LEFT].GetSrcRectConst().top +
+		m_psSize.cy -
+		m_Elements[H2D_SCREENFRAME_ELEMENT_TOPLEFT].GetSrcHeight() -
+		m_Elements[H2D_SCREENFRAME_ELEMENT_BOTTOMLEFT].GetSrcHeight();
+
+	// Update Right texture coordinates
+
+	m_Elements[H2D_SCREENFRAME_ELEMENT_RIGHT].GetSrcRect().bottom =
+		m_Elements[H2D_SCREENFRAME_ELEMENT_RIGHT].GetSrcRectConst().top +
+		m_psSize.cy - m_Elements[H2D_SCREENFRAME_ELEMENT_TOPRIGHT].GetSrcHeight() -
+		m_Elements[H2D_SCREENFRAME_ELEMENT_BOTTOMRIGHT].GetSrcHeight();
+
+	// Update Center texture coordinates
+
+	m_Elements[H2D_SCREENFRAME_ELEMENT_CENTER].GetSrcRect().right =
+		m_Elements[H2D_SCREENFRAME_ELEMENT_CENTER].GetSrcRectConst().left +
+		m_psSize.cx - m_Elements[H2D_SCREENFRAME_ELEMENT_TOPLEFT].GetSrcWidth() -
+		m_Elements[H2D_SCREENFRAME_ELEMENT_TOPRIGHT].GetSrcWidth();
+
+	m_Elements[H2D_SCREENFRAME_ELEMENT_CENTER].GetSrcRect().bottom =
+		m_Elements[H2D_SCREENFRAME_ELEMENT_LEFT].GetSrcRectConst().top +
+		m_psSize.cy -
+		m_Elements[H2D_SCREENFRAME_ELEMENT_TOPLEFT].GetSrcHeight() -
+		m_Elements[H2D_SCREENFRAME_ELEMENT_BOTTOMLEFT].GetSrcHeight();
+}
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenListBox implementation
+\*----------------------------------------------------------*/
+
+CHitman2DScreenListBox::CHitman2DScreenListBox(CThunderEngine& rEngine,
+											   LPCWSTR pszClass,
+											   CThunderScreen* pParent):
+
+												CThunderScreen(rEngine, pszClass, pParent),
+												m_nFirstVisibleItem(-1),
+												m_nVisibleItems(-1),
+												m_nMargin(10),
+												m_nItemHeight(20),
+												m_pFrame(NULL),
+												m_pScrollbar(NULL)
+{
+}
+
+CHitman2DScreenListBox::~CHitman2DScreenListBox(void)
+{
+}
+
+CHitman2DScreenListBox* CHitman2DScreenListBox::CreateInstance(CThunderEngine& rEngine,
+															   LPCWSTR pszClass,
+															   CThunderScreen* pParent)
+{
+	return new CHitman2DScreenListBox(rEngine, pszClass, pParent);
+}
+
+int CHitman2DScreenListBox::AddItem(LPCWSTR pszCaption, LPCWSTR pszDescription)
+{
+	// Add new item
+
+	CHitman2DScreenButtonEx* pNewItem = new CHitman2DScreenButtonEx(m_rEngine,
+																	L"buttonex",
+																	this);
+
+	pNewItem->SetStyle(m_strStyle);
+
+	pNewItem->SetCaption(pszCaption);
+	pNewItem->SetDescription(pszDescription);
+
+	m_arItems.push_back(pNewItem);
+
+	// Mark visible list for lazy update (on next render)
+
+	m_nVisibleItems = -1;
+
+	// Invalidate, if not rendered directly on screen
+
+	Invalidate();
+
+	return m_arItems.size() - 1;
+}
+
+int CHitman2DScreenListBox::AddItem(LPCWSTR pszCaption,
+									LPCWSTR pszDescription,
+									const CThunderTextureInstanceDynamic& rIcon,
+									D3DCOLOR clrCaption,
+									D3DCOLOR clrDescription)
+{
+	// Add new item
+
+	CHitman2DScreenButtonEx* pNewItem = new CHitman2DScreenButtonEx(m_rEngine,
+																	L"buttonex",
+																	this);
+	
+	pNewItem->SetStyle(m_strStyle);
+
+	pNewItem->SetCaption(pszCaption);
+	pNewItem->SetDescription(pszDescription);
+	pNewItem->GetIcon() = rIcon;
+	pNewItem->SetCaptionColor(clrCaption);
+	pNewItem->SetDescriptionColor(clrDescription);
+
+	m_arItems.push_back(pNewItem);
+
+	// Mark visible list for lazy update (on next render)
+
+	m_nVisibleItems = -1;
+
+	// Invalidate, if not rendered directly on screen
+
+	Invalidate();
+
+	return m_arItems.size() - 1;
+}
+
+void CHitman2DScreenListBox::InsertItem(int nIndex,
+										LPCWSTR pszCaption,
+										LPCWSTR pszDescription)
+{
+	// Add new item
+
+	CHitman2DScreenButtonEx* pNewItem = new CHitman2DScreenButtonEx(m_rEngine,
+																	L"buttonex",
+																	this);
+	
+	pNewItem->SetStyle(m_strStyle);
+
+	pNewItem->SetCaption(pszCaption);
+	pNewItem->SetDescription(pszDescription);
+
+	m_arItems.insert(m_arItems.begin() + nIndex, pNewItem);
+
+	// Mark visible list for lazy update (on next render)
+
+	m_nVisibleItems = -1;
+
+	// Invalidate, if not rendered directly on screen
+
+	Invalidate();
+}
+
+void CHitman2DScreenListBox::InsertItem(int nIndex,
+										LPCWSTR pszCaption,
+										LPCWSTR pszDescription,
+										const CThunderTextureInstanceDynamic& rIcon,
+										D3DCOLOR clrCaption,
+										D3DCOLOR clrDescription)
+{
+	// Add new item
+
+	CHitman2DScreenButtonEx* pNewItem = new CHitman2DScreenButtonEx(m_rEngine, L"buttonex", this);
+	
+	pNewItem->SetStyle(m_strStyle);
+
+	pNewItem->SetCaption(pszCaption);
+	pNewItem->SetDescription(pszDescription);
+	pNewItem->GetIcon() = rIcon;
+	pNewItem->SetCaptionColor(clrCaption);
+	pNewItem->SetDescriptionColor(clrDescription);
+
+	m_arItems.insert(m_arItems.begin() + nIndex, pNewItem);
+
+	// Mark visible list for lazy update (on next render)
+
+	m_nVisibleItems = -1;
+
+	// Invalidate, if not rendered directly on screen
+
+	Invalidate();
+}
+
+int CHitman2DScreenListBox::GetItemCount(void) const
+{
+	return int(m_arItems.size());
+}
+
+const CHitman2DScreenButtonEx& CHitman2DScreenListBox::GetItemConst(int nIndex) const
+{
+	return *m_arItems[nIndex];
+}
+
+CHitman2DScreenButtonEx& CHitman2DScreenListBox::GetItem(int nIndex)
+{
+	return *m_arItems[nIndex];
+}
+
+void CHitman2DScreenListBox::RemoveItem(int nIndex)
+{
+	// Deallocate item
+
+	m_lstChildren.Remove(m_arItems[nIndex], true);
+
+	// Remove item
+
+	m_arItems.erase(m_arItems.begin() + nIndex);
+
+	if(m_nVisibleItems != -1 && IsItemVisible(nIndex))
+	{
+		// Mark visible items for lazy update
+
+		m_nVisibleItems = -1;
+
+		// Invalidate if not rendered directly on screen
+
+		Invalidate();
+	}
+}
+
+void CHitman2DScreenListBox::RemoveAllItems(void)
+{
+	// Deallocate all items
+
+	for(vector<CHitman2DScreenButtonEx*>::iterator pos = m_arItems.begin();
+		pos != m_arItems.end();
+		pos++)
+	{
+		m_lstChildren.Remove(*pos, true);
+	}
+
+	// Clear list
+
+	m_arItems.clear();
+
+	// Mark visible items for lazy update
+
+	m_nVisibleItems = -1;
+
+	// Invalidate if not rendered directly on screen
+
+	Invalidate();
+}
+
+vector<CHitman2DScreenButtonEx*>::iterator CHitman2DScreenListBox::GetFirstItemPos(void)
+{
+	return m_arItems.begin();
+}
+
+vector<CHitman2DScreenButtonEx*>::const_iterator CHitman2DScreenListBox::GetFirstItemPosConst(void)
+{
+	return m_arItems.begin();
+}
+
+vector<CHitman2DScreenButtonEx*>::iterator CHitman2DScreenListBox::GetLastItemPos(void)
+{
+	return m_arItems.end();
+}
+
+vector<CHitman2DScreenButtonEx*>::const_iterator CHitman2DScreenListBox::GetLastItemPosConst(void)
+{
+	return m_arItems.end();
+}
+
+int CHitman2DScreenListBox::GetSelectedItem(void) const
+{
+	return m_nSelectedItem;
+}
+
+void CHitman2DScreenListBox::SetSelectedItem(int nSelectedItem)
+{
+	int nOldSel = m_nSelectedItem;
+
+	m_nSelectedItem = nSelectedItem;
+
+	// Toggle the button
+
+	m_arItems[nSelectedItem]->SetToggle(true);
+
+	if(IsItemVisible(m_nSelectedItem) == true)
+	{
+		// Invalidate if not rendered directly to screen
+
+		Invalidate();
+	}
+}
+
+bool CHitman2DScreenListBox::IsItemVisible(int nIndex) const
+{
+	if(m_nVisibleItems == -1) return false;
+
+	return (nIndex >= m_nFirstVisibleItem &&
+			nIndex < m_nFirstVisibleItem + m_nVisibleItems);
+}
+
+void CHitman2DScreenListBox::EnsureItemVisible(int nIndex)
+{
+	// If already visible, check if any part is cut off
+
+	bool bMakeFirst = true;
+
+	if(IsItemVisible(nIndex) == true)
+	{
+		if(0 == m_nVisibleItems) return;
+
+		CHitman2DScreenButtonEx* pItem = m_arItems[nIndex - m_nFirstVisibleItem];
+
+		if((pItem->GetPosition().y + m_nItemHeight) >= m_psSize.cy)
+		{
+			// Bottom is cut off. Scroll to make this the last item
+
+			bMakeFirst = false;
+		}
+		else if(pItem->GetPosition().y >= 0)
+		{
+			// No part is cut off, the item should already be visible
+
+			return;
+		}
+	}
+	else
+	{
+		if(nIndex >= m_nFirstVisibleItem + m_nVisibleItems)
+		{
+			// The invisible item is below the bottom.
+			// Scroll to make it the last item
+
+			bMakeFirst = false;
+		}
+	}
+
+	if(true == bMakeFirst)
+	{
+		m_nFirstVisibleItem = nIndex;
+	}
+	else
+	{
+		m_nFirstVisibleItem = nIndex - m_nVisibleItems + 1;
+	}
+}
+
+void CHitman2DScreenListBox::PreallocateItems(int nCount)
+{
+	m_arItems.reserve(nCount);
+}
+
+int CHitman2DScreenListBox::GetMargin(void) const
+{
+	return m_nMargin;
+}
+
+void CHitman2DScreenListBox::SetMargin(int nMargin)
+{
+	m_nMargin = nMargin;
+
+	// Mark visible items for lazy update on next render
+
+	m_nVisibleItems = -1;
+}
+
+int CHitman2DScreenListBox::GetItemHeight(void) const
+{
+	return m_nItemHeight;
+}
+
+void CHitman2DScreenListBox::SetItemHeight(int nItemHeight)
+{
+	m_nItemHeight = nItemHeight;
+
+	// TODO: Update height of items
+}
+
+void CHitman2DScreenListBox::OnRender(LPCRECT prc)
+{
+	// Update visible items if required before rendering
+
+	if(m_nVisibleItems == -1)
+		UpdateVisible();
+
+	// TODO: render
+
+	CThunderScreen::OnRender(prc);
+}
+
+void CHitman2DScreenListBox::OnSize(const SIZE& rpsOldSize)
+{
+	// TODO: resize scrollbar and reposition buttons
+}
+
+void CHitman2DScreenListBox::UpdateVisible(void)
+{
+	int nOldVisibleItems = int(m_arItems.size());
+
+	m_nVisibleItems = int(ceilf(float(m_psSize.cy - m_nMargin * 2) / float(m_nItemHeight)));
+
+	// TODO
+}
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenFps implementation
+\*----------------------------------------------------------*/
+
+CHitman2DScreenFps::CHitman2DScreenFps(CThunderEngine& rEngine,
+									   LPCWSTR pszClass,
+									   CThunderScreen* pParent):
+
+									   CHitman2DScreenOverlapped(rEngine, pszClass, pParent),
+									   m_bExtended(false),
+									   m_nLastFps(0),
+									   m_fLastSpf(-1.0f),
+									   m_pExtendedFont(NULL)
+
+{
+	m_extendedBackground.Empty();
+
+	ZeroMemory(m_szFps, sizeof(m_szFps));
+	ZeroMemory(m_szSpf, sizeof(m_szSpf));
+	ZeroMemory(m_szMspf, sizeof(m_szMspf));
+
+	SetRectEmpty(&m_rcTextPos);
+	SetRectEmpty(&m_rcExtTextPosS);
+	SetRectEmpty(&m_rcExtTextPosMs);
+}
+
+CHitman2DScreenFps::~CHitman2DScreenFps(void)
+{
+	if(m_pFont != NULL)
+		m_pFont->Release();
+
+	if(m_pExtendedFont != NULL)
+		m_pExtendedFont->Release();
+}
+
+CHitman2DScreenFps* CHitman2DScreenFps::CreateInstance(CThunderEngine& rEngine,
+													   LPCWSTR pszClass,
+													   CThunderScreen* pParent)
+{
+	return new CHitman2DScreenFps(rEngine, pszClass, pParent);
+}
+
+void CHitman2DScreenFps::SetExtended(bool bExtended)
+{
+	m_bExtended = bExtended;
+
+	if(true == bExtended)
+		m_Background = m_extendedBackground;
+	else
+		m_Background = m_normalBackground;
+
+	m_psSize.cy = m_Background.GetSrcHeight();
+
+	// When expanded or contracted, recache text rectangles
+
+	OnMove(m_ptPos);
+}
+
+bool CHitman2DScreenFps::GetExtended(void) const
+{
+	return m_bExtended;
+}
+
+void CHitman2DScreenFps::OnRender(LPCRECT prc)
+{
+	if(m_nLastFps != m_rEngine.GetGraphics().GetFPS())
+	{
+		// Cache FPS text
+
+		m_nLastFps = m_rEngine.GetGraphics().GetFPS();
+
+		StringCchPrintf(m_szFps, 8, L"%d", m_nLastFps);
+
+		// Cache SPF and MSPF text
+
+		m_fLastSpf = m_rEngine.GetFrameTime();
+
+		StringCchPrintf(m_szSpf, 16, L"%.3f", m_fLastSpf);
+
+		StringCchPrintf(m_szMspf, 16, L"%.2f", m_fLastSpf * 1000.0f);
+	}
+
+	// Don't render if fps is still 0 from the time screen was opened
+	// (incidentally, this may cause counter to never appear if frame rate is always 0)
+
+	if(L'\0' == *m_szFps) return;
+
+	// Render background
+
+	CThunderScreen::RenderBackground();
+	
+	// Render text
+
+	if(m_pFont != NULL)
+	{
+		m_pFont->GetD3DXFont()->DrawText(m_rEngine.GetGraphics().GetD3DXSprite(),
+										 m_szFps,
+										 wcslen(m_szFps),
+										 &m_rcTextPos,
+										 DT_SINGLELINE | DT_NOCLIP | DT_LEFT,
+										 0xFFFFFFFF);
+	}
+
+	if(true == m_bExtended && m_pExtendedFont != NULL)
+	{
+		m_pExtendedFont->GetD3DXFont()->DrawText(m_rEngine.GetGraphics().GetD3DXSprite(),
+												 m_szSpf,
+												 wcslen(m_szSpf),
+												 &m_rcExtTextPosS,
+												 DT_SINGLELINE | DT_NOCLIP,
+												 0xFFFFFFFF);
+
+		m_pExtendedFont->GetD3DXFont()->DrawText(m_rEngine.GetGraphics().GetD3DXSprite(),
+												 m_szMspf,
+												 wcslen(m_szMspf),
+												 &m_rcExtTextPosMs,
+												 DT_SINGLELINE | DT_NOCLIP,
+												 0xFFFFFFFF);
+	}
+}
+
+void CHitman2DScreenFps::Deserialize(const CThunderMLElem& rRoot)
+{
+	CHitman2DScreenOverlapped::Deserialize(rRoot);
+
+	// Read extended font
+
+	const CThunderMLElem* pElem = rRoot.FindChildConst(H2D_SZ_SCREENFPS_EXTENDED_FONT);
+
+	if(NULL == pElem)
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileElement(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath(), H2D_SZ_SCREENFPS_EXTENDED_FONT));
+	
+	try
+	{
+		m_pExtendedFont = m_rEngine.GetFonts().LoadInstance(*pElem);
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileDeserialize(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath()));
+	}
+
+	// Read extended background
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENFPS_EXTENDED_BACKGROUND);
+
+	if(NULL == pElem)
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileElement(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath(), H2D_SZ_SCREENFPS_EXTENDED_BACKGROUND));
+
+	try
+	{
+		m_extendedBackground.Deserialize(m_rEngine, *pElem);
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileDeserialize(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath()));
+	}
+
+	// Cache normal background from default background (which is required)
+
+	m_normalBackground = m_Background;
+
+	// Cache text rectangles for the first time
+
+	OnMove(m_ptPos);
+}
+
+DWORD CHitman2DScreenFps::GetMemoryFootprint(void) const
+{
+	return sizeof(CHitman2DScreenFps) - sizeof(CHitman2DScreenOverlapped) * 2 +
+		   CHitman2DScreenOverlapped::GetMemoryFootprint();
+}
+
+void CHitman2DScreenFps::OnMove(const POINT& rptOldPos)
+{
+	CHitman2DScreenOverlapped::OnMove(rptOldPos);
+
+	// Cache fps text rect
+
+	TEXTMETRIC tm;	
+	m_pFont->GetD3DXFont()->GetTextMetrics(&tm);
+
+	m_rcTextPos.left = m_ptPos.x + 10;
+	m_rcTextPos.right = m_ptPos.x + m_psSize.cx;
+	m_rcTextPos.bottom = m_ptPos.y + m_psSize.cy;
+
+	if(m_bExtended)
+	{
+		m_rcTextPos.top = m_ptPos.y +
+						  (m_psSize.cy / 2 -
+						  (tm.tmHeight + tm.tmExternalLeading)) / 2;
+
+		// Cache fsp text rects
+
+		m_pExtendedFont->GetD3DXFont()->GetTextMetrics(&tm);
+
+		m_rcExtTextPosS.left = m_ptPos.x + 10;
+		m_rcExtTextPosS.top = m_rcTextPos.top + m_psSize.cy / 2 - 2;
+		m_rcExtTextPosS.right = m_ptPos.x + m_psSize.cx;
+		m_rcExtTextPosS.bottom = m_ptPos.y + m_psSize.cy;
+
+		CopyRect(&m_rcExtTextPosMs, &m_rcExtTextPosS);
+
+		m_rcExtTextPosMs.top += tm.tmHeight - 2;
+	}
+	else
+	{
+		m_rcTextPos.top = m_ptPos.y + (m_psSize.cy - (tm.tmHeight + tm.tmExternalLeading)) / 2;
+	}
+}
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenConsole implementation
+\*----------------------------------------------------------*/
+
+CHitman2DScreenConsole::CHitman2DScreenConsole(CThunderEngine& rEngine,
+											   LPCWSTR pszClass,
+											   CThunderScreen* pParent):
+
+											   CHitman2DScreenOverlapped(rEngine, pszClass, pParent),
+											   m_bFullOpen(false),
+											   m_bReopen(false),
+											   m_bReclose(false),
+											   m_bJustToggled(false),
+											   m_bEnableFlash(true),
+											   m_fLastFlash(0.0f),
+											   m_nPromptAlpha(0),
+											   m_bFlashUp(true),
+											   m_bReplaceMode(false),
+											   m_bAddToLine(false),
+											   m_nColumnWidth(0),
+											   m_nLineHeight(0),
+											   m_nPromptWidth(0),
+											   m_nLines(0),
+											   m_nColumns(0),
+											   m_nInputColumns(0),
+											   m_nFirstVisible(0),
+											   m_nOpenPos(0),
+											   m_nInputScroll(0),
+											   m_nCaretPos(0),
+											   m_nHistoryPos(0),
+											   m_nHistoryLines(0),
+											   m_nHistoryUsed(0),
+											   m_nMoveAction(MOVE_NONE),
+											   m_pMoveTimer(NULL),											   
+											   m_ppszLines(NULL),
+											   m_pszInputLine(NULL),
+											   m_ppszHistory(NULL),
+											   m_prcLines(NULL),
+											   m_pclrLines(NULL),
+											   m_vrPrompt(0.0f, 0.0f, 0.0f),
+											   m_vrCaret(0.0f, 0.0f, 0.0f),
+											   m_vrBorder(0.0f, 0.0f, 0.0f)
+{
+	((CHitman2DGame*)m_rEngine.GetGameInstance())->SetConsole(this);
+
+	m_PromptTexture.Empty();
+	m_CaretTexture.Empty();
+	m_BorderTexture.Empty();
+
+	m_posNextCommand = rEngine.GetCommands().GetLastPos();
+}
+
+CHitman2DScreenConsole::~CHitman2DScreenConsole(void)
+{
+	Empty();
+}
+
+CHitman2DScreenConsole* CHitman2DScreenConsole::CreateInstance(CThunderEngine& rEngine,
+															   LPCWSTR pszClass,
+															   CThunderScreen* pParent)
+{
+	return new CHitman2DScreenConsole(rEngine, pszClass, pParent);
+}
+
+void CHitman2DScreenConsole::OnRender(LPCRECT prc)
+{
+	// Flash prompt
+
+	if(m_rEngine.GetRunTimeDelta(m_fLastFlash) > 0.01f)
+	{
+		m_fLastFlash = m_rEngine.GetRunTime();
+
+		if(true == m_bFlashUp)
+		{
+			m_nPromptAlpha += PROMPT_ALPHA_STEP;
+
+			if(m_nPromptAlpha > 255)
+			{
+				m_nPromptAlpha = 255;
+				m_bFlashUp = false;
+			}
+		}
+		else
+		{
+			m_nPromptAlpha -= PROMPT_ALPHA_STEP;
+
+			if(m_nPromptAlpha < 0)
+			{
+				m_nPromptAlpha = 0;
+				m_bFlashUp = true;
+			}
+		}
+	}
+
+	// Render background
+
+	RenderBackground();
+
+	// Render text output lines
+	// Not checking for failure, not checking for blank lines
+
+	for(int n = m_nLines - 1; n >= m_nFirstVisible;	n--)
+	{
+		m_pFont->GetD3DXFont()->DrawText(m_rEngine.GetGraphics().GetD3DXSprite(),
+										 m_ppszLines[n],
+										 wcslen(m_ppszLines[n]),
+										 &m_prcLines[n],
+										 DT_SINGLELINE | DT_NOCLIP,
+										 m_pclrLines[n]);
+	}
+
+	// Render input line
+
+	if(*m_pszInputLine != L'\0')
+	{
+		m_pFont->GetD3DXFont()->DrawText(m_rEngine.GetGraphics().GetD3DXSprite(),
+										 m_pszInputLine + m_nInputScroll,
+										 -1,
+										 &m_prcLines[m_nLines],
+										 DT_SINGLELINE | DT_NOCLIP,
+										 H2D_SCREENCONSOLE_COLORS[THU_PRINT_MESSAGE]);
+	}
+
+	// Render prompt
+
+	m_rEngine.GetGraphics().RenderQuad(m_PromptTexture.GetTexture()->GetD3DTexture(),
+									   m_PromptTexture.GetSrcRect(),
+									   m_vrPrompt,
+									   D3DCOLOR_ARGB(m_nPromptAlpha, 255, 255, 255));
+	// Render caret
+
+	if((MOVE_NONE == m_nMoveAction && true == m_bEnableFlash) ?
+		true : (m_nPromptAlpha > 127))
+	{
+		m_rEngine.GetGraphics().RenderQuad(m_CaretTexture.GetTexture()->GetD3DTexture(),
+										   m_CaretTexture.GetSrcRect(),
+										   m_vrCaret);
+	}
+
+	// Render border
+
+	if(false == m_bFullOpen)
+	{
+		m_rEngine.GetGraphics().RenderQuad(m_BorderTexture.GetTexture()->GetD3DTexture(),
+										   m_BorderTexture.GetSrcRect(),
+										   m_vrBorder);
+	}
+}
+
+void CHitman2DScreenConsole::Toggle(bool bFullOpen)
+{
+	if(m_rEngine.GetScreens().GetActiveScreen() != this)
+	{
+		m_bFullOpen = bFullOpen;
+
+		m_rEngine.GetScreens().SetActiveScreen(this);
+		m_rEngine.GetScreens().SetFocusScreen(this);
+
+		ClearFlag(THU_SCREEN_RENDER_INVISIBLE);
+		ClearFlag(THU_SCREEN_DISABLED);
+	}
+	else
+	{
+		if(m_rEngine.GetKeyState(VK_SHIFT) == true)
+		{
+			if(0 == m_ptPos.y)
+			{
+				// If fully open, close to half-size
+
+				m_bFullOpen = false;
+				m_bReopen = false;
+				m_bReclose = true;
+
+				m_nOpenPos = -m_psSize.cy / 2;
+
+				OnDeactivate(this);
+			}
+			else
+			{
+				// If not fully open, open to full size
+
+				m_bReopen = true;
+				m_bReclose = false;
+
+				OnActivate(this);
+			}
+		}
+		else
+		{
+			Deactivate();
+		}
+	}
+
+	m_bJustToggled = true;
+}
+
+void CHitman2DScreenConsole::Print(LPCWSTR pszText,
+								   THU_PRINT_TYPES nPrintType,
+								   bool bLine)
+{
+	if(NULL == m_ppszLines) return;
+
+	if(THU_PRINT_CLEAR == nPrintType)
+	{
+		for(int n = 0; n < m_nLines; n++)
+		{
+			ZeroMemory(m_ppszLines[n], m_nColumns * sizeof(WCHAR));
+			m_pclrLines[n] = H2D_SCREENCONSOLE_COLORS[0];
+		}
+
+		return;
+	}
+
+	if(NULL == pszText)
+	{
+		if(true == m_bAddToLine)
+		{
+			m_bAddToLine = false;
+
+			wcscat_s(m_ppszLines[m_nLines - 1], m_nColumns + 1, L" ");
+		}
+		else
+		{
+			Scroll();
+
+			*m_ppszLines[m_nLines - 1] = L' ';
+		}
+
+		return;
+	}
+
+	int nInitialLen = m_bAddToLine ? wcslen(m_ppszLines[m_nLines - 1]) : 0;
+	int nLen = nInitialLen;
+
+	for(LPCWSTR pszStart = pszText ;; pszText++)
+	{
+		switch(*pszText)
+		{
+		case L'\r':
+		case L'\n':
+			{
+				// CR breaks the line
+
+				if(true == m_bAddToLine)
+				{
+					m_bAddToLine = false;
+
+					wcsncat_s(m_ppszLines[m_nLines - 1],
+							  m_nColumns + 1,
+							  pszStart,
+							  nLen - nInitialLen);
+				}
+				else
+				{
+					Scroll();
+
+					wcsncpy_s(m_ppszLines[m_nLines - 1],
+							  m_nColumns + 1,
+							  pszStart,
+							  nLen);
+				}
+
+				m_ppszLines[m_nLines - 1][nLen] = L'\0';
+
+				m_pclrLines[m_nLines - 1] = H2D_SCREENCONSOLE_COLORS[nPrintType];
+
+				// skip LF
+
+				if(L'\r' == pszText[0] && L'\n' == pszText[1])
+					pszText++;
+
+				pszStart = pszText + 1;
+
+				nLen = 0;
+			}
+			break;
+		case L'\t':
+			{
+				// Ignore tabs
+
+				nLen++;
+			}
+			break;
+		default:
+			{
+				nLen++;
+
+				if(nLen == m_nColumns || L'\0' == *pszText)
+				{
+					// Wrap or End Text
+
+					if(true == m_bAddToLine)
+					{
+						m_bAddToLine = false;
+
+						wcsncat_s(m_ppszLines[m_nLines - 1],
+								  m_nColumns + 1,
+								  pszStart,
+								  nLen - nInitialLen);
+					}
+					else
+					{
+						Scroll();
+
+						wcsncpy_s(m_ppszLines[m_nLines - 1],
+								  m_nColumns + 1,
+								  pszStart,
+								  nLen);
+					}
+
+					if(false == bLine)
+						m_bAddToLine = true;
+
+					m_ppszLines[m_nLines - 1][nLen] = L'\0';
+
+					m_pclrLines[m_nLines - 1] =
+						H2D_SCREENCONSOLE_COLORS[nPrintType];
+
+					if(L'\0' == *pszText) return;
+
+					pszStart = pszText + 1;
+
+					nLen = 0;			
+				}
+			}
+			break;
+		}
+	}
+}
+
+void CHitman2DScreenConsole::Scroll(void)
+{
+	// Scroll by 1 line
+
+	LPWSTR pszTemp = NULL;
+
+	for(int nFrom = 1, nTo = 0; nTo < (m_nLines - 1); nFrom++, nTo++)
+	{
+		// Swap pointers for each line
+
+		pszTemp = m_ppszLines[nTo];
+		m_ppszLines[nTo] = m_ppszLines[nFrom];
+		m_ppszLines[nFrom] = pszTemp;
+
+		// Offset line colors
+
+		m_pclrLines[nTo] = m_pclrLines[nFrom];
+	}
+
+	// Clear the last line that just got freed up
+
+	if(*m_ppszLines[m_nLines - 1])
+		ZeroMemory(m_ppszLines[m_nLines - 1], m_nColumns * sizeof(WCHAR));
+}
+
+void CHitman2DScreenConsole::ClearInput(void)
+{
+	ZeroMemory(m_pszInputLine, m_nInputColumns * sizeof(WCHAR));
+
+	m_nInputScroll = 0;
+	m_nCaretPos = 0;
+}
+
+void CHitman2DScreenConsole::UpdateLines(void)
+{
+	// Figure out visibility
+
+	if(m_ptPos.y < 0)
+		m_nFirstVisible = (-m_ptPos.y) / m_nLineHeight;
+	else
+		m_nFirstVisible = 0;
+
+	if(m_nFirstVisible >= m_nLines) m_nFirstVisible = m_nLines - 1;
+
+	// Update rectangles for visible lines (including the input line)
+
+	if(m_nFirstVisible >= m_nLines) m_nFirstVisible = m_nLines - 1;
+
+	SetRect(&m_prcLines[m_nFirstVisible],
+			m_ptPos.x + MARGIN_WIDTH,
+			m_ptPos.y + MARGIN_HEIGHT + m_nLineHeight * m_nFirstVisible,
+			m_ptPos.x + m_psSize.cx - MARGIN_WIDTH * 2,
+			m_ptPos.y + MARGIN_WIDTH + m_nLineHeight * (m_nFirstVisible + 1));
+
+	for(int n = m_nFirstVisible + 1; n < (m_nLines + 1); n++)
+	{
+		CopyRect(&m_prcLines[n], &m_prcLines[n - 1]);
+		OffsetRect(&m_prcLines[n], 0, m_nLineHeight);
+	}
+
+	// The input line rect (the last one) is offset by one char to allow
+	// space for prompt char
+
+	// Note: there are actually m_nLines+1 total lines allocated,
+	// so next two lines do read valid data
+
+	m_prcLines[m_nLines].top += 2;
+	m_prcLines[m_nLines].left += m_nPromptWidth + 2;
+
+	// Cache border position
+
+	m_vrBorder.x = float(m_ptPos.x);
+	m_vrBorder.y = float(m_ptPos.y + m_psSize.cy);
+	m_vrBorder.z = 0.0f;
+
+	UpdateCaret();
+}
+
+void CHitman2DScreenConsole::UpdateCaret(void)
+{
+	// Cache caret position
+
+	m_vrCaret.x = float(m_ptPos.x + MARGIN_WIDTH + m_nColumnWidth *
+						m_nCaretPos + m_nPromptWidth + 2);
+
+	m_vrCaret.y = float(m_ptPos.y + MARGIN_HEIGHT + m_nLineHeight *
+						m_nLines + 2);
+
+	m_vrCaret.z = 0.0f;
+
+	// Cache prompt position
+
+	m_vrPrompt.x = float(m_ptPos.x + MARGIN_WIDTH);
+	m_vrPrompt.y = m_vrCaret.y;
+	m_vrPrompt.z = 0.0f;
+}
+
+void CHitman2DScreenConsole::Deserialize(const CThunderMLElem& rRoot)
+{
+	CHitman2DScreenOverlapped::Deserialize(rRoot);
+
+	// Read prompt texture (not optional)
+
+	const CThunderMLElem* pElem =
+		rRoot.FindChildConst(H2D_SZ_SCREENCONSOLE_PROMPTTEXTURE);
+
+	if(NULL == pElem)
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileElement(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath(), H2D_SZ_SCREENCONSOLE_PROMPTTEXTURE));
+
+	try
+	{
+		m_PromptTexture.Deserialize(m_rEngine, *pElem);
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileDeserialize(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath()));
+	}
+
+	// Read caret texture (not optional)
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENCONSOLE_CARETTEXTURE);
+
+	if(NULL == pElem)
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileElement(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath(), H2D_SZ_SCREENCONSOLE_CARETTEXTURE));
+
+	try
+	{
+		m_CaretTexture.Deserialize(m_rEngine, *pElem);
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileDeserialize(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath()));
+	}
+
+	// Read border texture (not optional)
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENCONSOLE_BORDERTEXTURE);
+
+	if(NULL == pElem)
+		m_rEngine.GetErrors().Push(new CThunderErrorFileElement(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath(), H2D_SZ_SCREENCONSOLE_BORDERTEXTURE));
+
+	try
+	{
+		m_BorderTexture.Deserialize(m_rEngine, *pElem);
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileDeserialize(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath()));
+	}
+
+	// Read prompt flash (optional)
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENCONSOLE_PROMPTFLASH,
+								 THU_MLELEM_VALUE);
+
+	if(pElem != NULL && (pElem->GetVarType() == THU_VAR_INT ||
+	   pElem->GetVarType() == THU_VAR_BOOL))
+	{
+		m_bEnableFlash = pElem->GetBoolValue();
+	}
+
+	// Read number of history lines
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENCONSOLE_HISTORYLINES,
+								 THU_MLELEM_VALUE,
+								 THU_VAR_INT);
+
+	if(pElem != NULL)
+		m_nHistoryLines = pElem->GetIntValue();
+	else
+		m_nHistoryLines = 8;
+
+	// Resize to fit screen
+
+	m_psSize.cx = int(m_rEngine.GetGraphics().GetDeviceParams().BackBufferWidth);
+	m_psSize.cy = int(m_rEngine.GetGraphics().GetDeviceParams().BackBufferHeight);
+
+	// Set initial out-of-screen position
+
+	SetPosition(0, -m_psSize.cy);
+
+	// Resize background and border texture coordinates to full screen
+
+	m_Background.GetSrcRect().right = m_Background.GetSrcRect().left +
+									  m_psSize.cx;
+
+	m_Background.GetSrcRect().bottom = m_Background.GetSrcRect().top +
+									   m_psSize.cy;
+
+	m_BorderTexture.GetSrcRect().right = m_BorderTexture.GetSrcRect().left +
+										 m_psSize.cx;
+
+	// Pre-calculate sizes and distances
+
+	m_nPromptWidth = m_PromptTexture.GetSrcWidth() + 2;
+
+	TEXTMETRIC tm;
+	m_pFont->GetD3DXFont()->GetTextMetrics(&tm);
+
+	m_nColumnWidth = tm.tmMaxCharWidth;
+	m_nLineHeight = tm.tmHeight + tm.tmExternalLeading + 1;
+
+	// Determine number of lines, columns in each line, and input line columns
+
+	m_nLines = (m_psSize.cy - MARGIN_HEIGHT * 2) / m_nLineHeight - 1;
+	m_nColumns = (m_psSize.cx - MARGIN_WIDTH * 2) / m_nColumnWidth;
+	m_nInputColumns = m_nColumns * 2;
+
+	// Allocate output lines
+
+	try
+	{
+		m_ppszLines = new LPWSTR[m_nLines];
+	}
+
+	catch(bad_alloc e)
+	{
+		UNREFERENCED_PARAMETER(e);
+
+		throw CThunderErrorMemAlloc(__FUNCTIONW__, sizeof(LPWSTR) * m_nLines);
+	}
+
+	// Allocate output line colors
+
+	try
+	{
+		m_pclrLines = new D3DCOLOR[m_nLines];
+	}
+
+	catch(bad_alloc e)
+	{
+		UNREFERENCED_PARAMETER(e);
+
+		throw CThunderErrorMemAlloc(__FUNCTIONW__, sizeof(D3DCOLOR) * m_nLines);
+	}
+
+	try
+	{
+		for(int n = 0; n < m_nLines; n++)
+		{
+			// Allocate columns for each output line
+
+			m_ppszLines[n] = new WCHAR[m_nColumns + 1];
+
+			// Clear columns for each output line
+
+			ZeroMemory(m_ppszLines[n], m_nColumns * sizeof(WCHAR));
+
+			// Set default color for each output line
+
+			m_pclrLines[n] = 0xFFFFFFFF;
+		}
+	}
+
+	catch(bad_alloc e)
+	{
+		UNREFERENCED_PARAMETER(e);
+
+		throw CThunderErrorMemAlloc(__FUNCTIONW__, sizeof(WCHAR) * (m_nColumns - 1));
+	}
+
+	// Allocate output line rectangles (extra 1 for input line)
+
+	try
+	{
+		m_prcLines = new RECT[m_nLines + 1];
+	}
+
+	catch(bad_alloc e)
+	{
+		UNREFERENCED_PARAMETER(e);
+
+		throw CThunderErrorMemAlloc(__FUNCTIONW__, sizeof(RECT) * (m_nLines + 1));
+	}
+
+	// Allocate history lines
+
+	try
+	{
+		m_ppszHistory = new LPWSTR[m_nHistoryLines];
+	}
+
+	catch(bad_alloc e)
+	{
+		UNREFERENCED_PARAMETER(e);
+
+		throw CThunderErrorMemAlloc(__FUNCTIONW__, sizeof(LPWSTR) * m_nHistoryLines);
+	}
+
+	// Allocate columns for each history line
+
+	try
+	{
+		for(int n = 0; n < m_nHistoryLines; n++)
+		{
+			m_ppszHistory[n] = new WCHAR[m_nInputColumns + 1];
+
+			ZeroMemory(m_ppszHistory[n], m_nInputColumns * sizeof(WCHAR));
+		}
+	}
+
+	catch(bad_alloc e)
+	{
+		UNREFERENCED_PARAMETER(e);
+
+		throw CThunderErrorMemAlloc(__FUNCTIONW__, sizeof(WCHAR) * (m_nInputColumns - 1));
+	}
+
+	// Allocate input line
+
+	try
+	{
+		m_pszInputLine = new WCHAR[m_nInputColumns + 1];
+	}
+
+	catch(bad_alloc e)
+	{
+		UNREFERENCED_PARAMETER(e);
+
+		throw CThunderErrorMemAlloc(__FUNCTIONW__, sizeof(WCHAR) * (m_nInputColumns - 1));
+	}
+
+	// Clear input line
+
+	ClearInput();
+
+	// Update text line rectangles
+
+	UpdateLines();
+}
+
+void CHitman2DScreenConsole::Empty(void)
+{
+	CHitman2DScreenOverlapped::Empty();	
+
+	CHitman2DGame* pGame =
+		dynamic_cast<CHitman2DGame*>(m_rEngine.GetGameInstance());
+
+	if(pGame != NULL)
+		pGame->SetConsole(NULL);
+
+	// Deallocate output lines
+
+	if(m_ppszLines != NULL)
+	{
+		for(int n = 0; n < m_nLines; n++)
+			delete[] m_ppszLines[n];
+
+		delete[] m_ppszLines;
+	}
+
+	// Deallocate output line colors
+
+	delete[] m_pclrLines;
+
+	// Deallocate output line rectangles
+
+	delete[] m_prcLines;
+
+	// Deallocate input line
+
+	delete[] m_pszInputLine;
+
+	// Deallocate history lines
+
+	if(m_ppszHistory != NULL)
+	{
+		for(int n = 0; n < m_nHistoryLines; n++)
+			delete[] m_ppszHistory[n];
+
+		delete[] m_ppszHistory;
+	}
+
+	// Release font
+
+	if(m_pFont != NULL)
+		m_pFont->Release();
+}
+
+DWORD CHitman2DScreenConsole::GetMemoryFootprint(void) const
+{
+	return sizeof(CHitman2DScreenConsole) -
+		   sizeof(CHitman2DScreenOverlapped) * 2 +
+		   CHitman2DScreenOverlapped::GetMemoryFootprint() +
+		   m_nLines * m_nColumns * sizeof(WCHAR) +
+		   m_nInputColumns * sizeof(WCHAR) +
+		   m_nHistoryLines * m_nColumns * sizeof(WCHAR);
+}
+
+void CHitman2DScreenConsole::OnActivate(CThunderScreen* pOldActive)
+{
+	ZOrder(THU_SCREEN_ZORDER_TOP);
+
+	ClearFlag(THU_SCREEN_DISABLED);
+
+	if(m_rEngine.GetKeyState(VK_SHIFT) == true)
+		m_bFullOpen = true;
+
+	if(NULL == m_pMoveTimer)
+	{
+		m_pMoveTimer = m_rEngine.GetTimers().Add(this,
+												 10.0f / 1000.0f,
+												 TIMER_SLIDE);
+
+		if(false == m_bReopen)
+			SetPosition(m_ptPos.x, -m_psSize.cy);
+
+		m_nOpenPos = m_bFullOpen ? 0 : -m_psSize.cy / 2;
+	}
+
+	m_nMoveAction = MOVE_IN;
+}
+
+void CHitman2DScreenConsole::OnDeactivate(CThunderScreen* pNewActive)
+{
+	// If deactivating on closure, exit
+
+	list<CThunderScreen*>::iterator pos;
+
+	if(m_rEngine.GetScreens().Find(this, pos) == false)
+		return;
+
+	if(false == m_bReclose)
+		SetFlag(THU_SCREEN_DISABLED);
+
+	if(NULL == m_pMoveTimer)
+	{
+		m_pMoveTimer = m_rEngine.GetTimers().Add(this,
+												 10.0f / 1000.0f,
+												 TIMER_SLIDE);
+	}
+
+	m_nMoveAction = MOVE_OUT;
+}
+
+void CHitman2DScreenConsole::OnTimer(CThunderTimer& rTimer)
+{
+	const int MOVE_DIST = 20;
+
+	switch(m_nMoveAction)
+	{
+	case MOVE_IN:
+		{
+			int nPos = m_ptPos.y;
+
+			if(m_ptPos.y < m_nOpenPos)
+			{
+				nPos += MOVE_DIST;
+
+				if(nPos > m_nOpenPos)
+				{
+					nPos = m_nOpenPos;
+					m_nMoveAction = MOVE_NONE;
+
+					m_bReopen = false;
+				}
+			}
+			else if(m_ptPos.y == m_nOpenPos)
+			{
+				m_nMoveAction = MOVE_NONE;
+
+				m_bReopen = false;
+			}
+
+			SetPosition(m_ptPos.x, nPos);
+
+			UpdateLines();
+		}
+		break;
+	case MOVE_OUT:
+		{
+			if(true == m_bReclose)
+			{
+				int nPos = m_ptPos.y;
+
+				if(m_ptPos.y > m_nOpenPos)
+				{
+					nPos -= MOVE_DIST;
+
+					if(nPos < m_nOpenPos)
+					{
+						nPos = m_nOpenPos;
+
+						m_nMoveAction = MOVE_NONE;
+
+						m_bReclose = false;
+					}
+				}
+				else
+				{
+					m_nMoveAction = MOVE_NONE;
+
+					m_bReclose = false;
+				}
+
+				SetPosition(m_ptPos.x, nPos);
+			}
+			else
+			{
+				int nPos = m_ptPos.y;
+
+				if(m_ptPos.y > -m_psSize.cy)
+				{
+					nPos -= MOVE_DIST;
+
+					if(nPos < -m_psSize.cy)
+					{
+						m_nMoveAction = MOVE_NONE;
+
+						SetFlag(THU_SCREEN_RENDER_INVISIBLE);
+					}
+				}
+				else
+				{
+					m_nMoveAction = MOVE_NONE;
+
+					SetFlag(THU_SCREEN_RENDER_INVISIBLE);
+				}
+
+				SetPosition(m_ptPos.x, nPos);
+			}
+
+			UpdateLines();
+		}
+		break;
+	default:
+		{
+			m_rEngine.GetTimers().Remove(this, TIMER_SLIDE);
+			m_pMoveTimer = NULL;
+		}
+		break;
+	}
+}
+
+void CHitman2DScreenConsole::OnKeyPress(int nAsciiCode)
+{
+	if(nAsciiCode < ' ')
+	{
+		// Ignore shortcuts except Ctrl+V to paste
+
+		if(22 == nAsciiCode) OnKeyDown(22);
+	}
+	else
+	{
+		// Ignore console toggling key if just toggled
+
+		if(true == m_bJustToggled)
+		{
+			m_bJustToggled = false;
+
+			CHitman2DGame* pGame =
+				dynamic_cast<CHitman2DGame*>(m_rEngine.GetGameInstance());
+
+			if(NULL == pGame) return;
+
+			if(VkKeyScanW(nAsciiCode) == pGame->GetControl(H2D_CONTROL_DEBUG_CONSOLE) ||
+			   m_rEngine.GetKeyState(VK_SHIFT))
+			{
+				return;
+			}
+		}
+
+		// Ignore input when in motion because of shift key
+
+		if(true == m_bReopen || true == m_bReclose)	return;
+
+		// Process the character entered
+
+		m_nHistoryPos = -1;
+
+		if((m_nCaretPos + m_nInputScroll + 1) == m_nInputColumns)
+			return;
+
+		if(true == m_bReplaceMode)
+		{
+			m_pszInputLine[m_nCaretPos + m_nInputScroll] = WCHAR(nAsciiCode);
+		}
+		else
+		{
+			for(int n = m_nInputColumns - 1;
+				n >= (m_nCaretPos + m_nInputScroll);
+				n--)
+			{
+				m_pszInputLine[n] = m_pszInputLine[n - 1];
+			}
+
+			m_pszInputLine[m_nCaretPos + m_nInputScroll] = WCHAR(nAsciiCode);
+		}
+
+		if((m_nColumns - 3) == m_nCaretPos)
+		{
+			m_nInputScroll++;
+		}
+		else
+		{
+			m_nCaretPos++;
+		}
+
+		UpdateCaret();
+	}
+}
+
+void CHitman2DScreenConsole::OnKeyDown(int nKeyCode)
+{
+	switch(nKeyCode)
+	{
+	case VK_BACK:
+		{
+			m_nHistoryPos = -1;
+
+			if(0 == m_nCaretPos) break;
+
+			if(0 == m_nInputScroll)
+				m_nCaretPos--;
+			else
+				m_nInputScroll--;
+
+			int nLen = wcslen(m_pszInputLine);
+
+			for(int n = (m_nCaretPos + m_nInputScroll); n < nLen; n++)
+				m_pszInputLine[n] = m_pszInputLine[n + 1];
+
+			UpdateCaret();
+		}
+		break;
+	case VK_LEFT:
+		{
+			if(0 == (m_nCaretPos + m_nInputScroll)) break;
+
+			if(m_nInputScroll != 0)
+				m_nInputScroll--;
+			else
+				m_nCaretPos--;
+
+			UpdateCaret();
+		}
+		break;
+	case VK_RIGHT:
+		{
+			if(m_nInputScroll != 0 &&
+			   ((m_nCaretPos + m_nInputScroll) < m_nInputColumns))
+			{
+				// Scroll the input line if already scrolling
+
+				if(L'\0' == m_pszInputLine[m_nCaretPos + m_nInputScroll])
+				  break;
+
+				m_nInputScroll++;
+			}
+			else
+			{
+				if(m_nCaretPos < (m_nColumns - 3))
+				{
+					// Move caret
+
+					if(L'\0' == m_pszInputLine[m_nColumns - 1] &&
+					   L'\0' == m_pszInputLine[m_nCaretPos])
+					   break;
+
+					m_nCaretPos++;
+				}
+				else
+				{
+					// Start scrolling the input line if caret is already at the end
+
+					if(L'\0' == m_pszInputLine[m_nCaretPos + m_nInputScroll] &&
+					   L'\0' == m_pszInputLine[m_nCaretPos + m_nInputScroll + 1])
+						break;
+
+					m_nInputScroll++;
+				}
+			}
+
+			UpdateCaret();
+		}
+		break;
+	case VK_UP:
+		{
+			if(*m_pszInputLine != '\0')
+			{
+				if(m_nHistoryPos <= 0)
+				{
+					m_nHistoryPos = m_nHistoryUsed - 1;
+
+					if(m_nHistoryPos <= -1) break;
+				}
+				else
+				{
+					if(m_nHistoryPos <= -1)
+						m_nHistoryPos = 0;
+					else
+						m_nHistoryPos--;
+				}
+
+				ClearInput();
+			}
+
+			if(m_nHistoryPos > -1)
+			{
+				wcscpy_s(m_pszInputLine, m_nInputColumns - 1, m_ppszHistory[m_nHistoryPos]);
+
+				OnKeyDown(VK_END);
+			}
+		}
+		break;
+	case VK_DOWN:
+		{
+			if(m_nHistoryPos >= (m_nHistoryUsed - 1))
+			{
+				m_nHistoryPos = 0;
+			}
+			else
+			{
+				if(m_nHistoryPos <= -1)
+					m_nHistoryPos = m_nHistoryUsed - 1;
+				else
+					m_nHistoryPos++;
+			}
+
+			if(m_nHistoryPos == -1) break;
+
+			ClearInput();
+
+			wcscpy_s(m_pszInputLine, m_nInputColumns - 1, m_ppszHistory[m_nHistoryPos]);
+
+			OnKeyDown(VK_END);
+		}
+		break;
+	case VK_DELETE:
+		{
+			// Shift chars in line by one (one gets deleted)
+
+			int nLen = wcslen(m_pszInputLine);
+
+			for(int n = (m_nCaretPos + m_nInputScroll); n < nLen; n++)
+				m_pszInputLine[n] = m_pszInputLine[n + 1];
+		}
+		break;
+	case VK_HOME:
+		{
+			m_nCaretPos = 0;
+			m_nInputScroll = 0;
+
+			UpdateCaret();
+		}
+		break;
+	case VK_END:
+		{
+			m_nCaretPos = wcslen(m_pszInputLine);
+
+			if(m_nCaretPos > (m_nColumns - 3))
+			{
+				m_nInputScroll = m_nCaretPos - (m_nColumns - 3);
+				m_nCaretPos = m_nColumns - 3;
+			}
+
+			UpdateCaret();
+		}
+		break;
+	case VK_INSERT:
+		{
+			m_bReplaceMode = !m_bReplaceMode;
+		}
+		break;
+	case VK_TAB:
+		{
+			// List registered commands
+
+			if(m_rEngine.GetCommands().GetCount() == 0)
+			{
+				m_posNextCommand = m_rEngine.GetCommands().GetLastPos();
+				return;
+			}
+
+			if(m_posNextCommand == m_rEngine.GetCommands().GetLastPos())
+			{
+				m_posNextCommand = m_rEngine.GetCommands().GetFirstPos();
+			}
+			else
+			{
+				m_posNextCommand++;
+
+				if(m_posNextCommand == m_rEngine.GetCommands().GetLastPos())
+					m_posNextCommand = m_rEngine.GetCommands().GetFirstPos();
+			}
+
+			ClearInput();
+
+			wcscpy_s(m_pszInputLine, m_nInputColumns - 1, m_posNextCommand->first);
+
+			OnKeyDown(VK_END);
+		}
+		break;
+	case VK_RETURN:
+		{
+			if(NULL == m_pszInputLine) break;
+
+			// Enter command
+
+			m_rEngine.GetCommands().ExecuteStatement(m_pszInputLine);
+
+			// Update history
+
+			for(int n = 0; n < m_nHistoryUsed; n++)
+			{
+				if(wcscmp(m_ppszHistory[n], m_pszInputLine) == 0)
+				{
+					m_nHistoryPos = n;
+
+					ClearInput();
+
+					UpdateCaret();
+
+					return;
+				}
+			}
+
+			m_nHistoryUsed++;
+
+			if(-1 == m_nHistoryPos)
+				m_nHistoryPos = m_nHistoryUsed - 1;
+			else
+				m_nHistoryPos++;
+
+			if(m_nHistoryUsed == m_nHistoryLines)
+			{
+				m_nHistoryUsed--;
+
+				ZeroMemory(m_ppszHistory[m_nHistoryUsed - 1],
+						   sizeof(WCHAR) *m_nInputColumns);
+
+				m_nHistoryPos = m_nHistoryUsed - 1;
+			}
+
+			if((m_nHistoryUsed - m_nHistoryPos) > 1)
+			{
+				// Move entries down below first
+
+				for(int n = m_nHistoryUsed - 1; n > m_nHistoryPos; n--)
+				{
+					LPWSTR psz = m_ppszHistory[n];
+					m_ppszHistory[n] = m_ppszHistory[n - 1];
+					m_ppszHistory[n - 1] = psz;
+				}
+			}
+
+			wcscpy_s(m_ppszHistory[m_nHistoryPos], m_nInputColumns, m_pszInputLine);
+
+			ClearInput();
+
+			UpdateCaret();
+		}
+		break;
+	case 22:
+		{
+			// Ctrl+V
+
+			if(OpenClipboard(m_rEngine.GetGameWindow()) == FALSE)
+			{
+				m_rEngine.Print(L"failed to open clipboard.", THU_PRINT_ERROR);
+				return;
+			}
+
+			LPCWSTR psz = (LPCWSTR)GetClipboardData(CF_UNICODETEXT);
+
+			int nPos = m_nInputScroll + m_nCaretPos;
+			int nNewLen = wcslen(psz);				
+			int nOldLen = wcslen(m_pszInputLine + nPos);
+			int nOldLast = nPos + nOldLen; // last char in old string
+			int nInsertLast = nPos + nNewLen; // last char in inserted string
+
+			// Do not go past allocated memory
+
+			if(nOldLast + nNewLen >= m_nInputColumns) break;
+
+			// Offset chars by the number of new chars to be inserted
+
+			for(int nFrom = nPos, nInto = nInsertLast;
+				nFrom < nOldLast;
+				nFrom++, nInto++)
+			{
+				m_pszInputLine[nInto] = m_pszInputLine[nFrom];
+			}
+
+			// Copy new data
+
+			wcsncpy_s(m_pszInputLine + nPos,
+					  m_nInputColumns - nPos,
+					  psz,
+					  nNewLen);
+
+			CloseClipboard();
+
+			// Set cursor to end of new data
+
+			if(nInsertLast > (m_nColumns - 3))
+			{
+				m_nInputScroll = nInsertLast - (m_nColumns - 3);
+
+				nInsertLast -= m_nInputScroll;
+			}
+			else
+			{
+				m_nInputScroll = 0;
+			}
+
+			m_nCaretPos = nInsertLast;
+
+			UpdateCaret();
+		}
+		break;
+	}
+}
+
+void CHitman2DScreenConsole::OnMouseLDown(POINT pt)
+{
+	if(m_rEngine.GetScreens().GetFocusScreen() != this)
+		m_rEngine.GetScreens().SetFocusScreen(this);
+}
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenCredits implementation
+\*----------------------------------------------------------*/
+
+CHitman2DScreenCredits::CHitman2DScreenCredits(CThunderEngine& rEngine,
+											   LPCWSTR pszClass,
+											   CThunderScreen* pParent):
+
+											   CHitman2DScreenOverlapped(rEngine, pszClass, pParent),
+											   m_nVisibleLines(0),
+											   m_nFirstVisibleLine(0),
+											   m_nRenderOffset(0),
+											   m_nScrollDistance(1),
+											   m_fScrollInterval(0.02f),
+											   m_pScrollTimer(NULL)
+{
+	// Reserve a couple of lines
+
+	m_arLines.reserve(64);
+}
+
+CHitman2DScreenCredits::~CHitman2DScreenCredits(void)
+{
+	Empty();
+}
+
+CHitman2DScreenCredits* CHitman2DScreenCredits::CreateInstance(CThunderEngine& rEngine,
+															   LPCWSTR pszClass,
+															   CThunderScreen* pParent)
+{
+	return new CHitman2DScreenCredits(rEngine, pszClass, pParent);
+}
+
+void CHitman2DScreenCredits::Deserialize(const CThunderMLElem& rRoot)
+{
+	CHitman2DScreenOverlapped::Deserialize(rRoot);
+
+	// Read credits path
+
+	const CThunderMLElem* pElem = rRoot.FindChildConst(H2D_SZ_SCREENCREDITS_CREDITSPATH,
+													   THU_MLELEM_VALUE,
+													   THU_VAR_STRING);
+
+	if(NULL == pElem)
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileElement(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath(), H2D_SZ_SCREENCREDITS_CREDITSPATH));
+
+	// Load credits text
+
+	CThunderStream stream(&m_rEngine.GetErrors(),
+						  m_rEngine.GetOption(THU_OPTION_ENABLESTREAMCACHE) ?
+						  &m_rEngine.GetStreamCache() : NULL);
+
+	try
+	{
+		stream.Open(pElem->GetStringValue(),
+					GENERIC_READ,
+					OPEN_EXISTING,
+					FILE_FLAG_SEQUENTIAL_SCAN);
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileDeserialize(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath()));
+	}
+
+	if(stream.IsUnicodeTextFile() == false)
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileNotUnicode(__FUNCTIONW__, pElem->GetStringValue()));
+
+	// Parse credits text to individual lines
+
+	try
+	{
+		stream.CreateReadBuffer(stream.GetSize() + 2);
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileDeserialize(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath()));
+	}
+
+	LPCWSTR pszStart = reinterpret_cast<LPCWSTR>(stream.GetReadBufferConst());
+	LPCWSTR pszEnd = wcschr(pszStart, L'\n');
+
+	for(int nLines = 0; ; nLines++)
+	{
+		if(NULL == pszEnd)
+			pszEnd = pszStart + wcslen(pszStart);
+
+		if(pszEnd[-1] == L'\r') pszEnd--;
+
+		int nLen = pszEnd - pszStart;
+
+		LPWSTR pszLine = new WCHAR[nLen + 1];
+
+		if(NULL == pszLine)
+			throw CThunderErrorMemAlloc(__FUNCTIONW__, nLen + 1);
+
+		if(nLen > 0) wcsncpy_s(pszLine, nLen + 1, pszStart, nLen);
+
+		pszLine[nLen] = L'\0';
+
+		m_arLines.push_back(pszLine);
+
+		if(L'\0' == *pszEnd)
+			break;
+		else
+			pszStart = pszEnd + 1;
+
+		pszStart++;
+
+		pszEnd = wcschr(pszStart, L'\n');
+	}
+
+	// Read scroll interval
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENCREDITS_SCROLLINTERVAL,
+								 THU_MLELEM_VALUE);
+
+	if(pElem != NULL)
+	{
+		if(pElem->GetVarType() == THU_VAR_INT)
+			m_fScrollInterval = float(pElem->GetIntValue());
+		else if(pElem->GetVarType() == THU_VAR_FLOAT)
+			m_fScrollInterval = pElem->GetFloatValue();
+	}
+
+	// Read scroll speed
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENCREDITS_SCROLLDISTANCE,
+								 THU_MLELEM_VALUE,
+								 THU_VAR_INT);
+
+	if(pElem != NULL)
+		m_nScrollDistance = pElem->GetIntValue();
+
+	// Cache a pointer to a child screen on which we will render text
+
+	m_pTextContainer =
+		dynamic_cast<CHitman2DScreenImage*>(m_lstChildren.FindByID(101));
+
+	if(NULL == m_pTextContainer)
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileElement(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath(), L"m_pTextContainer"));
+
+	// Get font metrics and calculate number of lines that can be visible at once
+
+	TEXTMETRIC tm;
+	m_pFont->GetD3DXFont()->GetTextMetrics(&tm);
+
+	m_nLineHeight = tm.tmHeight + tm.tmExternalLeading;
+
+	m_nVisibleLines = m_pTextContainer->GetSize().cy / m_nLineHeight + 1;
+
+	// Start scroll timer
+
+	m_pScrollTimer = m_rEngine.GetTimers().Add(this,
+											   m_fScrollInterval,
+											   TIMER_SCROLL);
+}
+
+void CHitman2DScreenCredits::Empty(void)
+{
+	CHitman2DScreenOverlapped::Empty();
+
+	// Release text lines
+
+	for(vector<LPWSTR>::iterator pos = m_arLines.begin();
+		pos != m_arLines.end();
+		pos++)
+	{
+		delete[] *pos;
+	}
+
+	m_arLines.clear();
+
+	// Release timer
+
+	if(m_pScrollTimer != NULL)
+	{
+		m_rEngine.GetTimers().Remove(this, TIMER_SCROLL);
+		m_pScrollTimer = NULL;
+	}
+
+	// Release font
+	
+	if(m_pFont != NULL)
+	{
+		m_pFont->Release();
+		m_pFont = NULL;
+	}
+}
+
+DWORD CHitman2DScreenCredits::GetMemoryFootprint(void) const
+{
+	DWORD dwTextSize = 0;
+
+	for(vector<LPWSTR>::const_iterator pos = m_arLines.begin();
+		pos != m_arLines.end();
+		pos++)
+	{
+		dwTextSize += wcslen(*pos);
+	}
+
+	return sizeof(CHitman2DScreenCredits) - sizeof(CHitman2DScreenOverlapped) * 2 +
+			CHitman2DScreenOverlapped::GetMemoryFootprint() + dwTextSize;
+}
+
+void CHitman2DScreenCredits::OnTimer(CThunderTimer& rTimer)
+{
+	if(rTimer.GetID() == TIMER_SCROLL)
+	{
+		try
+		{
+			// Render text
+
+			m_pTextContainer->SetAsRenderTarget(true);
+
+			m_rEngine.GetGraphics().Clear(m_pTextContainer->GetBackColor());
+
+			m_rEngine.GetGraphics().BeginScene();
+
+			m_rEngine.GetGraphics().BeginBatch();
+
+			m_rEngine.GetGraphics().SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
+
+			RECT rcLine = { 0,
+							m_nRenderOffset,
+							m_pTextContainer->GetSize().cx,
+							m_nRenderOffset + m_nLineHeight };
+
+			for(int nLine = m_nFirstVisibleLine;
+				nLine < (m_nFirstVisibleLine + m_nVisibleLines) && nLine != m_arLines.size();
+				nLine++)
+			{
+				if(*m_arLines[nLine] != L'\0')
+					m_pFont->GetD3DXFont()->DrawText(m_rEngine.GetGraphics().GetD3DXSprite(),
+					m_arLines[nLine],
+					-1,
+					&rcLine,
+					DT_SINGLELINE | DT_NOCLIP,
+					D3DCOLOR_ARGB(255, 0, 0, 0));
+
+				rcLine.top += m_nLineHeight;
+				rcLine.bottom += m_nLineHeight;
+			}
+
+			m_rEngine.GetGraphics().EndBatch();
+			m_rEngine.GetGraphics().EndScene();
+
+			m_pTextContainer->SetAsRenderTarget(false);
+
+			m_rEngine.GetGraphics().SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
+
+			// Update render offset
+
+			m_nRenderOffset -= m_nScrollDistance;
+
+			if(-m_nRenderOffset >= m_nLineHeight)
+			{
+				m_nRenderOffset = 0;
+
+				// Update first visible line
+
+				m_nFirstVisibleLine++;
+
+				if(m_nFirstVisibleLine >= int(m_arLines.size()))
+					m_nFirstVisibleLine = 0;
+			}
+		}
+
+		catch(CThunderError& rError)
+		{
+			UNREFERENCED_PARAMETER(rError);
+
+			throw m_rEngine.GetErrors().Push(new CThunderErrorInternal(__FUNCTIONW__));
+		}
+	}
+	else
+	{
+		CHitman2DScreenOverlapped::OnTimer(rTimer);
+	}	
+}
+
+void CHitman2DScreenCredits::OnCommand(int nCommandID, CThunderScreen* pSender, int nParam)
+{
+	// Close button clicked
+
+	if(102 == nCommandID)
+		Close();
+}
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenPause class implementation
+\*----------------------------------------------------------*/
+
+CHitman2DScreenPause::CHitman2DScreenPause(CThunderEngine& rEngine,
+										   LPCWSTR pszClass,
+										   CThunderScreen* pParent):
+										   CHitman2DScreenOverlapped(rEngine, pszClass, pParent),
+										   m_nBackgroundTile(0),
+										   m_fBackgroundHeight(0.0f),
+										   m_pSelectionImage(NULL)
+{
+}
+
+CHitman2DScreenPause::~CHitman2DScreenPause(void)
+{
+}
+
+CHitman2DScreenPause* CHitman2DScreenPause::CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderScreen* pParent)
+{
+	return new CHitman2DScreenPause(rEngine, pszClass, pParent);
+}
+
+void CHitman2DScreenPause::RenderBackground(void)
+{
+	D3DXVECTOR3 vrPos(0.0f, 0.0f, 0.0f);
+
+	for(int n = 0; n < m_nBackgroundTile; n++, vrPos.y += m_fBackgroundHeight)
+	{
+		m_rEngine.GetGraphics().RenderQuad(m_Background.GetTexture()->GetD3DTexture(),
+										   m_Background.GetSrcRectConst(),
+										   vrPos,
+										   m_clrBlend);
+	}
+}
+
+void CHitman2DScreenPause::Deserialize(const CThunderMLElem& rRoot)
+{
+	CHitman2DScreenOverlapped::Deserialize(rRoot);
+
+	// Read vertical spacing
+
+	const CThunderMLElem* pElem = rRoot.FindChildConst(H2D_SZ_SCREENPAUSE_VERTICALSPACING,
+													   THU_MLELEM_VALUE,
+													   THU_VAR_INT);
+
+	int nVerticalSpacing = pElem ? pElem->GetIntValue() : 0;
+
+	// Read horizontal spacing
+
+	pElem = rRoot.FindChildConst(H2D_SZ_SCREENPAUSE_HORIZONTALSPACING,
+								 THU_MLELEM_VALUE,
+								 THU_VAR_INT);
+
+	int nHorizontalSpacing = pElem ? pElem->GetIntValue() : 0;
+
+	// Automatically position all children
+
+	int nTotalHeight = 0;
+	int nWidestWidth = 0;
+	int nHighestID = 0;
+	int nProcessCount = 0;
+
+	for(list<CThunderScreen*>::const_iterator pos = m_lstChildren.GetFirstPosConst();
+		pos != m_lstChildren.GetLastPosConst();
+		pos++)
+	{
+		if(!(*pos)->GetID())
+		{
+			// If ID is 0, do not process
+
+			if(NULL == m_pSelectionImage)
+			{
+				// If this is the first item found with ID = 0,
+				// assume this is the selection image
+
+				m_pSelectionImage = dynamic_cast<CHitman2DScreenImage*>(*pos);
+			}
+		}
+		else
+		{
+			if(nHighestID < (*pos)->GetID())
+				nHighestID = (*pos)->GetID();
+
+			if(nWidestWidth < (*pos)->GetSize().cx)
+				nWidestWidth = (*pos)->GetSize().cx;
+
+			nTotalHeight += ((*pos)->GetSize().cy + nVerticalSpacing);
+
+			if(dynamic_cast<CHitman2DScreenImage*>(*pos) != NULL)
+				nWidestWidth += nHorizontalSpacing;
+
+			nProcessCount++;
+		}
+	}
+
+	nHighestID++;
+
+	POINT ptCurrentPos = { (m_psSize.cx - nWidestWidth) / 2,
+						   (m_psSize.cy - nTotalHeight) / 2 };
+
+	for(int n = nHighestID - nProcessCount; n < nHighestID; n++)
+	{
+		CThunderScreen* pScreen = m_lstChildren.FindByID(n);
+		
+		pScreen->SetPosition(ptCurrentPos);
+
+		ptCurrentPos.y += (pScreen->GetSize().cy + nVerticalSpacing);
+
+		if(dynamic_cast<CHitman2DScreenImage*>(pScreen) != NULL)
+			ptCurrentPos.x += nHorizontalSpacing;
+	}
+
+	// Resize background source rect
+
+	m_Background.GetSrcRect().right +=
+		(m_rEngine.GetGameInstance()->GetResolutionWidth() -
+		m_Background.GetSrcWidth());
+
+	// Calculate background tiling
+
+	m_fBackgroundHeight = float(m_Background.GetSrcHeight());
+
+	m_nBackgroundTile =
+		int(ceilf(float(m_rEngine.GetGameInstance()->GetResolutionHeight()) /
+		m_fBackgroundHeight));
+}
+
+int CHitman2DScreenPause::OnNotify(int nNotifyID, CThunderScreen* pSender, int nParam)
+{
+	CHitman2DScreenOverlapped::OnNotify(nNotifyID, pSender, nParam);
+
+	if(H2D_SCREENBUTTON_NOTIFY_SELECT == nNotifyID &&
+	   m_pSelectionImage != NULL)
+	{
+		switch(nParam)
+		{
+		case H2D_SCREENBUTTON_NOTIFY_SELECT_NONE:
+			{
+				// Make sure selection image is invisible
+
+				if(m_pSelectionImage->IsFlagSet(THU_SCREEN_RENDER_INVISIBLE) == false)
+					m_pSelectionImage->SetFlag(THU_SCREEN_RENDER_INVISIBLE);
+			}
+			break;
+		case H2D_SCREENBUTTON_NOTIFY_SELECT_HOVER:
+		case H2D_SCREENBUTTON_NOTIFY_SELECT_PUSHED:
+			{
+				// Move around the selection image
+
+				m_pSelectionImage->SetPosition(pSender->GetPosition().x -
+											   m_pSelectionImage->GetSize().cx,
+											   pSender->GetPosition().y - 2);
+
+				// Make sure selection image is visible
+
+				if(m_pSelectionImage->IsFlagSet(THU_SCREEN_RENDER_INVISIBLE) == true)
+					m_pSelectionImage->ClearFlag(THU_SCREEN_RENDER_INVISIBLE);
+
+				// Make sure its blend matches that of the button
+
+				m_pSelectionImage->SetBlend(pSender->GetBlend());
+			}
+			break;
+		}
+	}
+
+	return 0;
+}
+
+DWORD CHitman2DScreenPause::GetMemoryFootprint(void) const
+{
+	return sizeof(CHitman2DScreenPause) - sizeof(CHitman2DScreenOverlapped) * 2 +
+		   CHitman2DScreenOverlapped::GetMemoryFootprint();
+}
+
+void CHitman2DScreenPause::OnBeginFade(void)
+{
+	if(FADE_ACTION_IN == m_nFadeAction && FADE_STATE_OPENING == m_nFadeState)
+		m_rEngine.PauseSession(true);
+}
+
+void CHitman2DScreenPause::OnEndFade(void)
+{
+	if(FADE_ACTION_OUT == m_nFadeAction && FADE_STATE_CLOSING == m_nFadeState)
+		m_rEngine.PauseSession(false);
+}
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenStart class - main menu
+\*----------------------------------------------------------*/
+
+CHitman2DScreenStart::CHitman2DScreenStart(CThunderEngine& rEngine,
+										   LPCWSTR pszClass,
+										   CThunderScreen* pParent):
+
+										   CHitman2DScreenOverlapped(rEngine, pszClass, pParent),
+										   m_bFirstTimeFade(true),
+										   m_clrOverlayBlend(255, 255, 255, 0)
+{
+}
+
+CHitman2DScreenStart::~CHitman2DScreenStart(void)
+{
+}
+
+CHitman2DScreenStart* CHitman2DScreenStart::CreateInstance(CThunderEngine& rEngine,
+														   LPCWSTR pszClass,
+														   CThunderScreen* pParent)
+{
+	return new CHitman2DScreenStart(rEngine, pszClass, pParent);
+}
+
+void CHitman2DScreenStart::OnRender(LPCRECT prc)
+{
+	CHitman2DScreenOverlapped::OnRender(prc);
+
+	if(m_nFadeAction != FADE_ACTION_NONE &&
+	   false == m_bFirstTimeFade)
+	{
+		// Render overlay
+
+		m_rEngine.GetGraphics().RenderQuad(m_Overlay.GetTexture()->GetD3DTexture(),
+										   m_Overlay.GetSrcRectConst(),
+										   m_vrCachedPos,
+										   m_clrOverlayBlend);
+	}
+}
+
+void CHitman2DScreenStart::Deserialize(const CThunderMLElem& rRoot)
+{
+	CHitman2DScreenOverlapped::Deserialize(rRoot);
+
+	// Read overlay texture
+
+	const CThunderMLElem* pElem = rRoot.FindChildConst(H2D_SZ_SCREENSTART_OVERLAY);
+
+	if(NULL == pElem)
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileElement(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath(), H2D_SZ_SCREENSTART_OVERLAY));
+
+	try
+	{
+		m_Overlay.Deserialize(m_rEngine, *pElem);
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		throw m_rEngine.GetErrors().Push(new CThunderErrorFileDeserialize(__FUNCTIONW__, rRoot.GetDocumentConst().GetPath()));
+	}
+
+	// Save normal texture
+
+	m_Normal = m_Background;
+}
+
+DWORD CHitman2DScreenStart::GetMemoryFootprint(void) const
+{
+	return sizeof(CHitman2DScreenStart) - sizeof(CHitman2DScreenOverlapped) * 2 +
+		   CHitman2DScreenOverlapped::GetMemoryFootprint();
+}
+
+void CHitman2DScreenStart::OnActivate(CThunderScreen* pOldActive)
+{
+	CHitman2DScreenOverlapped::OnActivate(pOldActive);
+
+	if(false == m_bFirstTimeFade)
+	{
+		// If fading overlay, enable all children and make them visible
+
+		for(list<CThunderScreen*>::iterator pos = m_lstChildren.GetFirstPos();
+			pos != m_lstChildren.GetLastPos();
+			pos++)
+		{
+			if(NULL == *pos) continue;
+
+			(*pos)->ClearFlag(THU_SCREEN_RENDER_INVISIBLE);
+			(*pos)->ClearFlag(THU_SCREEN_DISABLED);
+		}
+
+		// Change the background to normal texture
+
+		m_Background = m_Normal;
+	}
+}
+
+void CHitman2DScreenStart::OnTimer(CThunderTimer& rTimer)
+{
+	if(rTimer.GetID() != TIMER_FADE)
+	{
+		CHitman2DScreenOverlapped::OnTimer(rTimer);
+		return;
+	}
+
+	int nOverlayAlpha = m_clrOverlayBlend.GetA();
+
+	if(true == m_bFirstTimeFade)
+	{
+		// If first time, fade in
+
+		CHitman2DScreenOverlapped::OnTimer(rTimer);
+
+		if(FADE_ACTION_NONE == m_nFadeAction)
+			m_bFirstTimeFade = false;
+	}
+	else
+	{
+		// If activating or deactivating, fade the overlay
+
+		if(FADE_ACTION_IN == m_nFadeAction)
+		{
+			// Fade out overlay
+
+			nOverlayAlpha -= m_nScreenFadeStep;
+
+			if(nOverlayAlpha <= 0)
+			{
+				nOverlayAlpha = 0;
+
+				m_nFadeAction = FADE_ACTION_NONE;
+				m_nFadeState = FADE_STATE_NONE;
+				
+				m_rEngine.GetTimers().Remove(this, TIMER_FADE);
+
+				m_pFadeTimer = NULL;
+			}
+		}
+		else
+		{
+			// Fade in overlay
+
+			nOverlayAlpha += m_nScreenFadeStep;
+
+			if(nOverlayAlpha >= 255)
+			{
+				// Remove fading timer
+
+				m_rEngine.GetTimers().Remove(this, TIMER_FADE);
+
+				// If was closing, release
+
+				if(FADE_STATE_CLOSING == m_nFadeState)
+				{
+					Release();
+					return;
+				}
+
+				nOverlayAlpha = 255;
+
+				m_nFadeAction = FADE_ACTION_NONE;
+				m_nFadeState = FADE_STATE_NONE;
+				m_pFadeTimer = NULL;
+
+				// If fading overlay, disable all children and make them invisible
+
+				for(list<CThunderScreen*>::iterator pos = m_lstChildren.GetFirstPos();
+					pos != m_lstChildren.GetLastPos();
+					pos++)
+				{
+					if(NULL == *pos) continue;
+
+					(*pos)->SetFlag(THU_SCREEN_RENDER_INVISIBLE);
+					(*pos)->SetFlag(THU_SCREEN_DISABLED);
+				}
+
+				// Set the background to overlay
+
+				m_Background = m_Overlay;
+			}			
+		}
+
+		m_clrOverlayBlend.SetA(nOverlayAlpha);
+	}
+}
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenProgress implementation
+\*----------------------------------------------------------*/
+
+CHitman2DScreenProgress::CHitman2DScreenProgress(CThunderEngine& rEngine,
+												 LPCWSTR pszClass,
+												 CThunderScreen* pParent):
+
+												 CHitman2DScreenOverlapped(rEngine, pszClass, pParent),
+												 m_bSession(false),
+												 m_bCancel(false),
+												 m_pScreenProgress(NULL),
+												 m_pScreenStatus(NULL)
+{
+	for(int n = 0; n < THU_PROGRESS_COUNT; n++)
+	{
+		m_fProgress[n] = 0.0f;
+	}
+}
+
+CHitman2DScreenProgress::~CHitman2DScreenProgress(void)
+{
+}
+
+CHitman2DScreenProgress* CHitman2DScreenProgress::CreateInstance(CThunderEngine& rEngine,
+																 LPCWSTR pszClass,
+																 CThunderScreen* pParent)
+{
+	return new CHitman2DScreenProgress(rEngine, pszClass, pParent);
+}
+
+void CHitman2DScreenProgress::SetProgress(THU_PROGRESS_TYPES nType,
+										  THU_PROGRESS_SUBTYPES nSubType,
+										  int nProgress,
+										  int nProgressMax)
+{
+	if(true == m_bCancel) return;
+
+	float fTotalProgress = 0.0f;
+
+	if(THU_PROGRESS_SESSION == nSubType)
+	{
+		// Set loading session flag if not set
+
+		m_bSession = true;
+
+		if(nProgress == nProgressMax)
+		{
+			// If done loading session, close
+
+			fTotalProgress = 1.0f;
+
+			SetFlag(THU_SCREEN_DISABLED);
+
+			Close();
+		}
+	}
+
+	if(THU_PROGRESS_MAP == nSubType && false == m_bSession)
+	{
+		// If done loading map and not loading session, close
+
+		if(nProgress == nProgressMax)
+		{
+			fTotalProgress = 1.0f;
+
+			SetFlag(THU_SCREEN_DISABLED);
+
+			Close();
+		}
+	}
+	else
+	{
+		// Update progress subitem
+
+		m_fProgress[nSubType] = float(nProgress) / float(nProgressMax);
+		
+		// Add up everything loaded so far
+
+		for(int n = 0; n < THU_PROGRESS_COUNT; n++)
+		{
+			fTotalProgress += m_fProgress[n];
+		}
+
+		if(m_bSession)
+			fTotalProgress /= float(THU_PROGRESS_COUNT);
+		else
+			fTotalProgress /= float(THU_PROGRESS_COUNT - 3);
+	}
+
+	// Set progress
+
+	m_pScreenProgress->SetProgress(int(fTotalProgress * 100.0f));
+
+	// Set status text
+
+	WCHAR szMsg[MAX_PATH] = {0};
+
+	StringCchPrintf(szMsg,
+					MAX_PATH,
+					L"%s %s (%d%%)",
+					H2D_SZ_PROGRESS_TYPES[nType],
+					H2D_SZ_PROGRESS_SUBTYPES[nSubType],
+					int(m_fProgress[nSubType] * 100.0f));
+
+	m_pScreenStatus->SetText(szMsg);
+
+	// Wait so we can see the progress screen (temporary of course)
+
+	m_rEngine.GetGameInstance()->Wait(0.1f);
+}
+
+bool CHitman2DScreenProgress::IsAborted(void) const
+{
+	return m_bCancel;
+}
+
+void CHitman2DScreenProgress::Deserialize(const CThunderMLElem& rRoot)
+{
+	CHitman2DScreenOverlapped::Deserialize(rRoot);
+
+	m_pScreenProgress =
+		dynamic_cast<CHitman2DScreenProgressBar*>(m_lstChildren.FindByID(102));
+
+	if(NULL == m_pScreenProgress)
+		throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidPtr(__FUNCTIONW__, L"m_pScreenProgress"));
+
+	m_pScreenStatus =
+		dynamic_cast<CHitman2DScreenLabel*>(m_lstChildren.FindByID(101));
+
+	if(NULL == m_pScreenStatus)
+		m_rEngine.GetErrors().Push(new CThunderErrorInvalidPtr(__FUNCTIONW__, L"m_pScreenStatus"));
+}
+
+DWORD CHitman2DScreenProgress::GetMemoryFootprint(void) const
+{
+	return sizeof(CHitman2DScreenProgress) - sizeof(CHitman2DScreenOverlapped) * 2 +
+		   CHitman2DScreenOverlapped::GetMemoryFootprint();
+}
+
+void CHitman2DScreenProgress::OnCommand(int nCommandID,
+										CThunderScreen* pSender,
+										int nParam)
+{
+	if(103 == nCommandID)
+	{
+		// Cancel button clicked
+
+		m_bCancel = true;
+
+		SetFlag(THU_SCREEN_DISABLED);
+
+		Close();
+	}
+}
+
+/*----------------------------------------------------------*\
+| CHitman2DScreenExit implementation
+\*----------------------------------------------------------*/
+
+CHitman2DScreenExit::CHitman2DScreenExit(CThunderEngine& rEngine,
+										 LPCWSTR pszClass,
+										 CThunderScreen* pParent):
+
+										 CHitman2DScreenOverlapped(rEngine, pszClass, pParent)
+{
+}
+
+CHitman2DScreenExit::~CHitman2DScreenExit(void)
+{
+}
+
+CHitman2DScreenExit* CHitman2DScreenExit::CreateInstance(CThunderEngine& rEngine,
+														 LPCWSTR pszClass,
+														 CThunderScreen* pParent)
+{
+	return new CHitman2DScreenExit(rEngine, pszClass, pParent);
+}
+
+void CHitman2DScreenExit::OnCommand(int nCommandID,
+									CThunderScreen* pSender,
+									int nParam)
+{
+	switch(nCommandID)
+	{
+	case 101:
+		{
+			if(m_rEngine.GetGameInstance())
+				m_rEngine.GetGameInstance()->Exit();
+		}
+		break;
+	case 102:
+		{
+			Close();
+		}
+		break;
+	}
+}

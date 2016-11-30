@@ -1,0 +1,1349 @@
+/*------------------------------------------------------------------*\
+|
+| Hitman2DDialogs.cpp
+|
+|-------------------------------------------------------------------
+|
+| Content: HiTMAN: 2D dialog box procedures implementation
+| Created: 08/03/2007
+|
+|-------------------------------------------------------------------
+| Copyright © Valeriy Novytskyy
+\*------------------------------------------------------------------*/
+
+/*----------------------------------------------------------*\
+| Includes
+\*----------------------------------------------------------*/
+
+#include "stdafx.h"				// precompiled header
+#include "resource.h"			// using resource constants
+#include "Hitman2DDialogs.h"	// using resource constants, defining dialog procedures
+#include "Hitman2DGame.h"		// using CHitman2DGame
+#include "Hitman2DGlobals.h"	// using DW_THUDEVICEFORMATS
+#include <crtdbg.h>				// using ASSERT
+#include <commctrl.h>			// using UpDown control, Slider control
+#include <commdlg.h>			// using OPENFILENAME, GetSaveFileName
+
+/*----------------------------------------------------------*\
+| Constants
+\*----------------------------------------------------------*/
+
+LPCWSTR H2D_SZ_LOGMODES_DLG[] = {
+									L"Disable Logging",
+									L"Text Logging",
+									L"HTML Logging"
+								};
+
+
+/*----------------------------------------------------------*\
+| CHitman2DDialogVideo implementation
+\*----------------------------------------------------------*/
+
+CHitman2DDialogVideo::CHitman2DDialogVideo(CHitman2DGame* pGame)
+{
+	_ASSERT(pGame);
+
+	m_nDevType = pGame->GetDeviceType();
+	m_bSWVP = pGame->GetSoftwareVertexProcessing();
+	m_bPure = pGame->GetPureDevice();
+}
+
+CHitman2DDialogVideo::~CHitman2DDialogVideo(void)
+{
+}
+
+THU_DEVICE_TYPES CHitman2DDialogVideo::GetDeviceType(void) const
+{
+	return m_nDevType;
+}
+
+bool CHitman2DDialogVideo::GetSWVP(void) const
+{
+	return m_bSWVP;
+}
+
+bool CHitman2DDialogVideo::GetPure(void) const
+{
+	return m_bPure;
+}
+
+int CHitman2DDialogVideo::Show(HWND hWndParent, LPDIRECT3D9 pD3D)
+{
+	_ASSERT(pD3D);
+
+	m_pD3D = pD3D;
+
+	return DialogBoxParam((HINSTANCE)GetModuleHandle(NULL), (LPCWSTR)IDD_VIDEO, hWndParent, (DLGPROC)DlgProc, (LPARAM)this);
+}
+
+LRESULT CALLBACK CHitman2DDialogVideo::DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	CHitman2DDialogVideo* pData = (CHitman2DDialogVideo*)GetWindowLong(hDlg, GWL_USERDATA);
+
+	switch(uMsg)
+	{
+	case WM_INITDIALOG:
+		{
+			// Set data
+
+			_ASSERT(lParam);
+
+			SetWindowLong(hDlg, GWL_USERDATA, lParam);
+
+			pData = (CHitman2DDialogVideo*)lParam;
+
+			// Initialize controls
+
+			SendDlgItemMessage(hDlg, IDC_DEVTYPE, CB_SETCURSEL, (WPARAM)pData->m_nDevType, 0);
+
+			SendDlgItemMessage(hDlg, IDC_HWVP, BM_SETCHECK, pData->m_bSWVP ? BST_CHECKED : BST_UNCHECKED, 0);
+
+			SendDlgItemMessage(hDlg, IDC_PURE, BM_SETCHECK, pData->m_bPure ? BST_CHECKED : BST_UNCHECKED, 0);
+
+			HWND hParent = GetParent(hDlg);
+
+			bool bWindowed = (SendDlgItemMessage(hParent, IDC_FULLSCREEN, BM_GETCHECK, 0, 0) == BST_UNCHECKED);
+
+			int nSelFormat = SendDlgItemMessage(hParent, IDC_FORMAT, CB_GETCURSEL, 0, 0);
+
+			int nFormatData = SendDlgItemMessage(hParent, IDC_FORMAT, CB_GETITEMDATA, nSelFormat, 0);
+
+			BYTE* byFormatData = (BYTE*)&nFormatData;
+
+			THU_DEVICE_FORMATS nFormat = (THU_DEVICE_FORMATS)byFormatData[2];
+
+			D3DFORMAT nDispFormat = D3DFMT_X8R8G8B8;
+			D3DFORMAT nBufferFormat = D3DFMT_X8R8G8B8;
+
+			if(nFormat > THU_FORMAT_DESKTOP)
+			{
+				nDispFormat = (D3DFORMAT)H2D_DW_THUDEVICEFORMATS[nFormat];
+				nBufferFormat = nDispFormat;
+			}
+			else
+			{
+				D3DDISPLAYMODE dmDesktop = {0};
+				pData->m_pD3D->GetAdapterDisplayMode(D3DADAPTER_DEFAULT, &dmDesktop);
+
+				nDispFormat = dmDesktop.Format;
+				nBufferFormat = dmDesktop.Format;
+			}
+
+			const LPCWSTR H2D_SZ_DEVTYPES[] = { L"Hardware (HAL)", L"Software (REF)", L"Software Only (NULLREF)" };
+
+			int nDefaultIndex = -1;
+
+			for(int nDevType = 0; nDevType < THU_DEVICE_COUNT; nDevType++)
+			{
+				if(nDevType == THU_DEVICE_NULLREF || SUCCEEDED(pData->m_pD3D->CheckDeviceType(D3DADAPTER_DEFAULT, (D3DDEVTYPE)H2D_DW_THUDEVICETYPES[nDevType], nDispFormat, nBufferFormat, bWindowed)))
+				{
+					int nIndex = SendDlgItemMessage(hDlg, IDC_DEVTYPE, CB_ADDSTRING, 0, (LPARAM)H2D_SZ_DEVTYPES[nDevType]);
+
+					SendDlgItemMessage(hDlg, IDC_DEVTYPE, CB_SETITEMDATA, nIndex, (LPARAM)nDevType);
+
+					if(nDefaultIndex == -1 && nDevType == pData->m_nDevType)
+						nDefaultIndex = nIndex;
+				}
+			}
+
+			if(nDefaultIndex != -1)
+				SendDlgItemMessage(hDlg, IDC_DEVTYPE, CB_SETCURSEL, nDefaultIndex, 0);
+
+			// Set focus to first control in tab order
+
+			return true;
+		}
+		break;
+	case WM_COMMAND:
+		{
+			switch(LOWORD(wParam))
+			{
+			case IDOK:
+				{
+					// Save data
+
+					pData->m_nDevType = (THU_DEVICE_TYPES)SendDlgItemMessage(hDlg, IDC_DEVTYPE, CB_GETITEMDATA, SendDlgItemMessage(hDlg, IDC_DEVTYPE, CB_GETCURSEL, 0, 0), 0);
+					
+					pData->m_bSWVP = (SendDlgItemMessage(hDlg, IDC_HWVP, BM_GETCHECK, 0, 0) == BST_CHECKED);
+
+					pData->m_bPure = (SendDlgItemMessage(hDlg, IDC_PURE, BM_GETCHECK, 0, 0) == BST_CHECKED);
+		
+					EndDialog(hDlg, IDOK);
+				}
+				break;
+			case IDCANCEL:
+				{
+					EndDialog(hDlg, IDCANCEL);
+				}
+				break;
+			}
+		}
+		break;
+	case WM_CLOSE:
+		{
+			EndDialog(hDlg, IDCANCEL);
+		}
+		break;
+	}
+
+	return false;
+}
+
+/*----------------------------------------------------------*\
+| CHitman2DDialogAudio implementation
+\*----------------------------------------------------------*/
+
+CHitman2DDialogAudio::CHitman2DDialogAudio(CHitman2DGame* pGame)
+{
+	_ASSERT(pGame);
+
+	m_bExclusive = (pGame->GetEngine().GetOption(THU_OPTION_EXCLUSIVESOUND) == TRUE);
+	m_bDisableSounds = (pGame->GetEngine().GetOption(THU_OPTION_DISABLESOUNDS) == TRUE);
+	m_bDisableMusic = (pGame->GetEngine().GetOption(THU_OPTION_DISABLEMUSIC) == TRUE);
+}
+
+CHitman2DDialogAudio::~CHitman2DDialogAudio(void)
+{
+}
+
+bool CHitman2DDialogAudio::GetExclusive(void) const
+{
+	return m_bExclusive;
+}
+
+bool CHitman2DDialogAudio::GetDisableSound(void) const
+{
+	return m_bDisableSounds;
+}
+
+bool CHitman2DDialogAudio::GetDisableMusic(void) const
+{
+	return m_bDisableMusic;
+}
+
+int CHitman2DDialogAudio::Show(HWND hWndParent)
+{
+	return DialogBoxParam((HINSTANCE)GetModuleHandle(NULL), (LPCWSTR)IDD_AUDIO, hWndParent, (DLGPROC)DlgProc, (LPARAM)this); 
+}
+
+LRESULT CALLBACK CHitman2DDialogAudio::DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	CHitman2DDialogAudio* pData = (CHitman2DDialogAudio*)GetWindowLong(hDlg, GWL_USERDATA);
+
+	switch(uMsg)
+	{
+	case WM_INITDIALOG:
+		{
+			// Set data
+
+			_ASSERT(lParam);
+
+			SetWindowLong(hDlg, GWL_USERDATA, lParam);
+
+			pData = (CHitman2DDialogAudio*)lParam;
+
+			// Initialize controls
+
+			SendDlgItemMessage(hDlg, IDC_EXCLUSIVESOUND, BM_SETCHECK, pData->m_bExclusive ? BST_CHECKED : BST_UNCHECKED, 0);
+
+			SendDlgItemMessage(hDlg, IDC_DISABLESOUNDS, BM_SETCHECK, pData->m_bDisableSounds ? BST_CHECKED : BST_UNCHECKED, 0);
+
+			SendDlgItemMessage(hDlg, IDC_DISABLEMUSIC, BM_SETCHECK, pData->m_bDisableMusic ? BST_CHECKED : BST_UNCHECKED, 0);
+
+			// Set focus to the first control in tab order
+
+			return true;
+		}
+		break;
+	case WM_COMMAND:
+		{
+			switch(LOWORD(wParam))
+			{
+			case IDOK:
+				{
+					pData->m_bExclusive = (SendDlgItemMessage(hDlg, IDC_EXCLUSIVESOUND, BM_GETCHECK, 0, 0) == BST_CHECKED);
+
+					pData->m_bDisableSounds = (SendDlgItemMessage(hDlg, IDC_DISABLESOUNDS, BM_GETCHECK, 0, 0) == BST_CHECKED);
+
+					pData->m_bDisableMusic = (SendDlgItemMessage(hDlg, IDC_DISABLEMUSIC, BM_GETCHECK, 0, 0) == BST_CHECKED);
+
+					EndDialog(hDlg, IDOK);
+				}
+				break;
+			case IDCANCEL:
+				{
+					EndDialog(hDlg, IDCANCEL);
+				}
+				break;
+			}
+		}
+		break;
+	case WM_CLOSE:
+		{
+			EndDialog(hDlg, IDCANCEL);
+		}
+		break;
+	}
+
+	return false;
+}
+
+/*----------------------------------------------------------*\
+| CHitman2DDialogStartup implementation
+\*----------------------------------------------------------*/
+
+CHitman2DDialogStartup::CHitman2DDialogStartup(CHitman2DGame* pGame)
+{
+	if(!pGame->GetLogFilePath()) pGame->SetLogFilePath(NULL);
+	if(!pGame->GetScriptPath()) pGame->SetScriptPath(NULL);
+	if(!pGame->GetControlsProfilePath()) pGame->SetControlsProfilePath(NULL);
+
+	m_strLogFilePath = pGame->GetLogFilePath();
+	m_strScriptPath = pGame->GetScriptPath();
+	m_strControlsPath = pGame->GetControlsProfilePath();
+
+	m_nLogMode = pGame->GetLogMode();
+}
+
+CHitman2DDialogStartup::~CHitman2DDialogStartup(void)
+{
+}
+
+const CThunderString& CHitman2DDialogStartup::GetLogFilePath(void) const
+{
+	return m_strLogFilePath;
+}
+
+const CThunderString& CHitman2DDialogStartup::GetScriptPath(void) const
+{
+	return m_strScriptPath;
+}
+
+const CThunderString& CHitman2DDialogStartup::GetControlsPath(void) const
+{
+	return m_strControlsPath;
+}
+
+THU_LOG_MODE CHitman2DDialogStartup::GetLogMode(void) const
+{
+	return m_nLogMode;
+}
+
+int CHitman2DDialogStartup::Show(HWND hWndParent)
+{
+	return DialogBoxParam((HINSTANCE)GetModuleHandle(NULL), (LPCWSTR)IDD_STARTUP, hWndParent, (DLGPROC)DlgProc, (LPARAM)this);
+}
+
+LRESULT CALLBACK CHitman2DDialogStartup::DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	CHitman2DDialogStartup* pData = (CHitman2DDialogStartup*)GetWindowLong(hDlg, GWL_USERDATA);
+
+	switch(uMsg)
+	{
+	case WM_INITDIALOG:
+		{
+			// Set Data
+
+			_ASSERT(lParam);
+
+			SetWindowLong(hDlg, GWL_USERDATA, lParam);
+			
+			pData = (CHitman2DDialogStartup*)lParam;
+
+			// Initialize Controls
+
+			SetDlgItemText(hDlg, IDC_LOGFILEPATH, pData->m_strLogFilePath);
+
+			SetDlgItemText(hDlg, IDC_SCRIPTFILEPATH, pData->m_strScriptPath);
+
+			SetDlgItemText(hDlg, IDC_CONTROLSPATH, pData->m_strControlsPath);
+
+			HWND hWndLogMode = GetDlgItem(hDlg, IDC_LOGMODE);
+
+			for(int n = 0; n < THU_LOG_COUNT; n++)
+			{
+				SendMessage(hWndLogMode, CB_ADDSTRING, 0, (LPARAM)H2D_SZ_LOGMODES_DLG[n]);
+			}
+
+			SendMessage(hWndLogMode, CB_SETCURSEL, pData->m_nLogMode, 0);
+
+			return true;
+		}
+		break;
+	case WM_COMMAND:
+		{
+			switch(LOWORD(wParam))
+			{
+			case IDC_BROWSELOGPATH:
+				{
+					OPENFILENAME ofn = {0};
+
+					WCHAR szCurDir[MAX_PATH] = {0};
+					GetCurrentDirectory(MAX_PATH - 1, szCurDir);
+
+					WCHAR szPath[MAX_PATH] = {0};
+					wcscpy_s(szPath, MAX_PATH, pData->m_strLogFilePath);
+
+					ofn.lStructSize = sizeof(OPENFILENAME);
+					ofn.hwndOwner = hDlg;
+					ofn.Flags = OFN_CREATEPROMPT;
+					ofn.lpstrTitle = L"Browse For Log File";
+					ofn.lpstrFile = szPath;
+					ofn.nMaxFile = MAX_PATH - 1;
+					ofn.lpstrFilter = L"Log Files (*.log)\0*.log\0Text Files (*.txt)\0*.txt\0";
+					ofn.lpstrDefExt = L".log";
+					ofn.lpstrInitialDir = szCurDir;
+
+					if(GetSaveFileName(&ofn))
+					{
+						WCHAR szRelPath[128] = {0};
+
+						PathRelativePathTo(szRelPath, szCurDir, FILE_ATTRIBUTE_DIRECTORY, szPath, FILE_ATTRIBUTE_NORMAL);
+
+						SetDlgItemText(hDlg, IDC_LOGFILEPATH, szRelPath);
+
+						SetCurrentDirectory(szCurDir);
+					}
+				}
+				break;
+			case IDC_BROWSESCRIPTPATH:
+				{
+					OPENFILENAME ofn = {0};
+
+					WCHAR szCurDir[MAX_PATH] = {0};
+					GetCurrentDirectory(MAX_PATH - 1, szCurDir);
+
+					WCHAR szPath[MAX_PATH] = {0};
+					wcscpy_s(szPath, MAX_PATH, pData->m_strScriptPath);
+
+					ofn.lStructSize = sizeof(OPENFILENAME);
+					ofn.hwndOwner = hDlg;
+					ofn.Flags = OFN_CREATEPROMPT;
+					ofn.lpstrTitle = L"Browse For Startup Script";
+					ofn.lpstrFile = szPath;
+					ofn.nMaxFile = MAX_PATH - 1;
+					ofn.lpstrFilter = L"ThunderStorm Scripts (*.thc)\0*.thc\0";
+					ofn.lpstrDefExt = L".thc";
+					ofn.lpstrInitialDir = szCurDir;
+
+					if(GetSaveFileName(&ofn))
+					{
+						WCHAR szRelPath[128] = {0};
+
+						PathRelativePathTo(szRelPath, szCurDir, FILE_ATTRIBUTE_DIRECTORY, szPath, FILE_ATTRIBUTE_NORMAL);
+
+						SetDlgItemText(hDlg, IDC_SCRIPTFILEPATH, szRelPath);
+
+						SetCurrentDirectory(szCurDir);
+					}
+				}
+				break;
+			case IDC_BROWSECONTROLSPATH:
+				{
+					OPENFILENAME ofn = {0};
+
+					WCHAR szCurDir[MAX_PATH] = {0};
+					GetCurrentDirectory(MAX_PATH - 1, szCurDir);
+
+					WCHAR szPath[MAX_PATH] = {0};
+					wcscpy_s(szPath, MAX_PATH, pData->m_strControlsPath);
+
+					ofn.lStructSize = sizeof(OPENFILENAME);
+					ofn.hwndOwner = hDlg;
+					ofn.Flags = OFN_CREATEPROMPT;
+					ofn.lpstrTitle = L"Browse For Controls Profile";
+					ofn.lpstrFile = szPath;
+					ofn.nMaxFile = MAX_PATH - 1;
+					ofn.lpstrFilter = L"Profiles (*.ini)\0*.ini\0";
+					ofn.lpstrDefExt = L".ini";
+					ofn.lpstrInitialDir = szCurDir;
+
+					if(GetSaveFileName(&ofn))
+					{
+						WCHAR szRelPath[128] = {0};
+
+						PathRelativePathTo(szRelPath, szCurDir, FILE_ATTRIBUTE_DIRECTORY, szPath, FILE_ATTRIBUTE_NORMAL);
+
+						SetDlgItemText(hDlg, IDC_CONTROLSPATH, szRelPath);
+
+						SetCurrentDirectory(szCurDir);
+					}
+				}
+				break;
+			case IDOK:
+				{
+					// Transfer data from controls
+
+					if(!pData->m_strLogFilePath.Allocate(MAX_PATH))
+					{
+						MessageBox(hDlg, L"Failed to allocate memory.", NULL, MB_ICONSTOP);
+						break;
+					}
+
+					GetDlgItemText(hDlg, IDC_LOGFILEPATH, pData->m_strLogFilePath.GetBuffer(), MAX_PATH - 1);
+
+					if(!pData->m_strScriptPath.Allocate(MAX_PATH))
+					{
+						MessageBox(hDlg, L"Failed to allocate memory.", NULL, MB_ICONSTOP);
+						break;
+					}
+
+					GetDlgItemText(hDlg, IDC_SCRIPTFILEPATH, pData->m_strScriptPath.GetBuffer(), MAX_PATH - 1);
+
+					if(!pData->m_strControlsPath.Allocate(MAX_PATH))
+					{
+						MessageBox(hDlg, L"Failed to allocate memory.", NULL, MB_ICONSTOP);
+						break;
+					}
+
+					GetDlgItemText(hDlg, IDC_CONTROLSPATH, pData->m_strControlsPath.GetBuffer(), MAX_PATH - 1);
+
+					pData->m_nLogMode = (THU_LOG_MODE)SendDlgItemMessage(hDlg, IDC_LOGMODE, CB_GETCURSEL, 0, 0);
+					if(pData->m_nLogMode == CB_ERR) pData->m_nLogMode = THU_LOG_DISABLE;
+
+					EndDialog(hDlg, IDOK);
+				}
+				break;
+			case IDCANCEL:
+				{
+					EndDialog(hDlg, IDCANCEL);
+				}
+				break;
+			}
+		}
+		break;
+	case WM_CLOSE:
+		{
+			EndDialog(hDlg, IDCANCEL);
+		}
+		break;
+	}
+
+	return false;
+}
+
+/*----------------------------------------------------------*\
+| CHitman2DDialogConfigure implementation
+\*----------------------------------------------------------*/
+
+CHitman2DDialogConfigure::CHitman2DDialogConfigure(CHitman2DGame* pGame):	m_pGame(pGame),
+																			m_pD3D(NULL),
+																			m_nDevFormat(THU_FORMAT_DESKTOP),
+																			m_dwResWidth(0),
+																			m_dwResHeight(0),
+																			m_dwRefresh(0),
+
+																			m_dialogVideo(pGame),
+																			m_dialogAudio(pGame),
+																			m_dialogStartup(pGame)
+{
+	_ASSERT(pGame);
+
+	m_nDevFormat = pGame->GetDeviceFormat();
+	m_dwResWidth = (DWORD)pGame->GetResolutionWidth();
+	m_dwResHeight = (DWORD)pGame->GetResolutionHeight();
+	m_dwRefresh = pGame->GetRefreshRate();
+}
+
+CHitman2DDialogConfigure::~CHitman2DDialogConfigure(void)
+{
+}
+
+int CHitman2DDialogConfigure::Show(void)
+{
+	return DialogBoxParam((HINSTANCE)GetModuleHandle(NULL), (LPCWSTR)IDD_CONFIGURE, NULL, (DLGPROC)DlgProc, (LPARAM)this);
+}
+
+LRESULT CALLBACK CHitman2DDialogConfigure::DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	CHitman2DDialogConfigure* pData = (CHitman2DDialogConfigure*)GetWindowLong(hDlg, GWL_USERDATA);
+
+	switch(uMsg)
+	{
+	case WM_INITDIALOG:
+		{
+			// Get extra data
+
+			if(lParam)
+			{
+				pData = (CHitman2DDialogConfigure*)lParam;
+
+				SetWindowLong(hDlg, GWL_USERDATA, lParam);
+
+				// Create a D3D9 instance
+
+				HRESULT hr = CoInitialize(NULL);
+
+				if(FAILED(hr))
+				{
+					MessageBox(NULL, L"Failed to initialize COM.", pData->m_pGame->GetTitle(), MB_ICONSTOP);
+					return false;
+				}
+
+				pData->m_pD3D = Direct3DCreate9(D3D_SDK_VERSION);
+
+				if(!pData->m_pD3D)
+				{
+					CoUninitialize();
+
+					MessageBox(NULL, L"Failed to create IDirect3D9 instance.", pData->m_pGame->GetTitle(), MB_ICONSTOP);
+					return false;
+				}
+
+				// Display default adapter information
+
+				D3DADAPTER_IDENTIFIER9 adapterID = {0};
+
+				if(FAILED(pData->m_pD3D->GetAdapterIdentifier(0, 0, &adapterID)))
+				{
+					SetDlgItemText(hDlg, IDC_STATIC_ADAPTER, L"Failed to retrieve adapter info.");
+				}
+				else
+				{
+					WCHAR szAdapter[256] = {0};
+					mbstowcs_s(NULL, szAdapter, 256, adapterID.Description, 256);
+
+					SetDlgItemText(hDlg, IDC_STATIC_ADAPTER, szAdapter);
+				}
+
+				// Check or uncheck full screen
+
+				SendDlgItemMessage(hDlg, IDC_FULLSCREEN, BM_SETCHECK, pData->m_pGame->GetFullScreen() ? BST_CHECKED : BST_UNCHECKED, 0);
+
+				SendMessage(hDlg, WM_COMMAND, MAKEWPARAM(IDC_FULLSCREEN, BN_CLICKED), 0);
+
+				// Check or uncheck vsync
+
+				SendDlgItemMessage(hDlg, IDC_VSYNC, BM_SETCHECK, pData->m_pGame->GetVSync() ? BST_CHECKED : BST_UNCHECKED, 0);
+
+				// Check or uncheck show configure (only if set by user)
+
+				if(pData->m_pGame->GetConfigureExternal() == false)
+					SendDlgItemMessage(hDlg, IDC_SHOWCONFIGURE, BM_SETCHECK, pData->m_pGame->GetShowConfigure() ? BST_CHECKED : BST_UNCHECKED, 0);
+
+				// Update volume sliders
+
+				int nPos = int(pData->m_pGame->GetEffectsVolume() * 100);
+				SendDlgItemMessage(hDlg, IDC_SLIDER_EFFECTSVOLUME, TBM_SETRANGE, true, MAKELPARAM(0, 100));
+				SendDlgItemMessage(hDlg, IDC_SLIDER_EFFECTSVOLUME, TBM_SETPOS, true, nPos);
+				SendMessage(hDlg, WM_HSCROLL, MAKEWPARAM(SB_THUMBPOSITION, nPos), (LPARAM)GetDlgItem(hDlg, IDC_SLIDER_EFFECTSVOLUME));
+
+				nPos = int(pData->m_pGame->GetSpeechVolume() * 100);
+				SendDlgItemMessage(hDlg, IDC_SLIDER_SPEECHVOLUME, TBM_SETRANGE, true, MAKELPARAM(0, 100));
+				SendDlgItemMessage(hDlg, IDC_SLIDER_SPEECHVOLUME, TBM_SETPOS, true, nPos);
+				SendMessage(hDlg, WM_HSCROLL, MAKEWPARAM(SB_THUMBPOSITION, nPos), (LPARAM)GetDlgItem(hDlg, IDC_SLIDER_SPEECHVOLUME));
+
+				nPos = int(pData->m_pGame->GetMusicVolume() * 100);
+				SendDlgItemMessage(hDlg, IDC_SLIDER_MUSICVOLUME, TBM_SETRANGE, true, MAKELPARAM(0, 100));
+				SendDlgItemMessage(hDlg, IDC_SLIDER_MUSICVOLUME, TBM_SETPOS, true, nPos);
+				SendMessage(hDlg, WM_HSCROLL, MAKEWPARAM(SB_THUMBPOSITION, nPos), (LPARAM)GetDlgItem(hDlg, IDC_SLIDER_MUSICVOLUME));
+
+				// Set dialog icon
+
+				SendMessage(hDlg, WM_SETICON, false, (LPARAM)LoadImage((HINSTANCE)GetModuleHandle(NULL), (LPCWSTR)101, IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR));
+				SendMessage(hDlg, WM_SETICON, true, (LPARAM)LoadIcon((HINSTANCE)GetModuleHandle(NULL), (LPCWSTR)101));
+			}
+
+			_ASSERT(pData);
+
+			// Add supported formats for selected device type
+
+			HWND hWndFormatList = GetDlgItem(hDlg, IDC_FORMAT);
+
+			SendMessage(hWndFormatList, CB_RESETCONTENT, 0, 0);
+
+			D3DDISPLAYMODE dmDesktop = {0};
+			pData->m_pD3D->GetAdapterDisplayMode(D3DADAPTER_DEFAULT, &dmDesktop);
+
+			int nIndex = -1;
+			int nDefaultIndex = -1;
+
+			for(DWORD dwDevFormat = 0; dwDevFormat < (sizeof(H2D_DW_THUDEVICEFORMATS) / sizeof(DWORD)); dwDevFormat++)
+			{
+				bool bFullScreen = false;
+				bool bWindowed = false;
+
+				if(dwDevFormat == 0)
+				{
+					bWindowed = true;
+					bFullScreen = true;
+				}
+				else
+				{
+					if(SUCCEEDED(pData->m_pD3D->CheckDeviceType(D3DADAPTER_DEFAULT, (D3DDEVTYPE)H2D_DW_THUDEVICETYPES[pData->m_dialogVideo.GetDeviceType()], (D3DFORMAT)H2D_DW_THUDEVICEFORMATS[dwDevFormat], (D3DFORMAT)H2D_DW_THUDEVICEFORMATS[dwDevFormat], false)))
+						bWindowed = true;
+
+					if(SUCCEEDED(pData->m_pD3D->CheckDeviceType(D3DADAPTER_DEFAULT, (D3DDEVTYPE)H2D_DW_THUDEVICETYPES[pData->m_dialogVideo.GetDeviceType()], (D3DFORMAT)H2D_DW_THUDEVICEFORMATS[dwDevFormat], dmDesktop.Format, true)))
+						bFullScreen = true;
+				}
+
+				if(bFullScreen || bWindowed)
+				{
+					// Add format
+
+					nIndex = SendMessage(hWndFormatList, CB_ADDSTRING, 0, (LPARAM)H2D_SZ_THUDEVICEFORMATS[dwDevFormat]);
+
+					// Encode format style in extra data
+
+					BYTE byExtraData[4] = {(BYTE)bFullScreen, (BYTE)bWindowed, (BYTE)dwDevFormat, 0};
+					SendMessage(hWndFormatList, CB_SETITEMDATA, nIndex, *(int*)&byExtraData);
+
+					// See if this should be the default index
+
+					if(pData->m_nDevFormat > THU_FORMAT_DESKTOP)
+					{
+						if(dwDevFormat == H2D_DW_THUDEVICEFORMATS[pData->m_nDevFormat])
+							nDefaultIndex = nIndex;
+					}
+					else
+					{
+						if(dwDevFormat == dmDesktop.Format)
+							nDefaultIndex = nIndex;
+					}
+				}
+			}
+
+			if(nIndex != -1)
+			{
+				int nSel = nDefaultIndex == -1 ? 0 : nDefaultIndex;
+
+				SendMessage(hWndFormatList, CB_SETCURSEL, nSel, 0);
+
+				SendMessage(hDlg, WM_COMMAND, MAKEWPARAM(IDC_FORMAT, CBN_SELCHANGE), 0);
+			}
+
+			return true;
+		}
+		break;
+	case WM_HSCROLL:
+		{
+			if(LOWORD(wParam) == SB_THUMBPOSITION || LOWORD(wParam) == SB_THUMBTRACK)
+			{
+				WCHAR szPos[8] = {0};
+
+				StringCbPrintfW(szPos, 16, L"%d%%", HIWORD(wParam));
+
+				if(lParam == (LPARAM)GetDlgItem(hDlg, IDC_SLIDER_EFFECTSVOLUME))
+				{
+					SetDlgItemText(hDlg, IDC_STATIC_EFFECTSVOLUME, szPos);
+				}
+				else if(lParam == (LPARAM)GetDlgItem(hDlg, IDC_SLIDER_SPEECHVOLUME))
+				{
+					SetDlgItemText(hDlg, IDC_STATIC_SPEECHVOLUME, szPos);
+				}
+				else if(lParam == (LPARAM)GetDlgItem(hDlg, IDC_SLIDER_MUSICVOLUME))
+				{
+					SetDlgItemText(hDlg, IDC_STATIC_MUSICVOLUME, szPos);
+				}
+			}
+		}
+		break;
+	case WM_NOTIFY:
+		{
+			switch(wParam)
+			{
+			case IDC_SPIN_FORMAT:
+				{
+					// Format spinned
+
+					LPNMUPDOWN pData = (LPNMUPDOWN)lParam;
+
+					int nFormat = SendDlgItemMessage(hDlg, IDC_FORMAT, CB_GETCURSEL, 0, 0);
+					int nCount = SendDlgItemMessage(hDlg, IDC_FORMAT, CB_GETCOUNT, 0, 0);
+
+					if(pData->iDelta < 0 && !nFormat)
+					{
+						nFormat = nCount - 1;
+					}
+					else if(pData->iDelta > 0 && nFormat == (nCount - 1))
+					{
+						nFormat = 0;
+					}
+					else
+					{
+						nFormat += pData->iDelta;
+					}
+
+					SendDlgItemMessage(hDlg, IDC_FORMAT, CB_SETCURSEL, nFormat, 0);
+				}
+				break;
+			case IDC_SPIN_RESOLUTION:
+				{
+					// Resolution spinned
+
+					LPNMUPDOWN pData = (LPNMUPDOWN)lParam;
+
+					int nRes = SendDlgItemMessage(hDlg, IDC_RESOLUTION, CB_GETCURSEL, 0, 0);
+					int nCount = SendDlgItemMessage(hDlg, IDC_RESOLUTION, CB_GETCOUNT, 0, 0);
+
+					if(pData->iDelta < 0 && !nRes)
+					{
+						nRes = nCount - 1;
+					}
+					else if(pData->iDelta > 0 && nRes == (nCount - 1))
+					{
+						nRes = 0;
+					}
+					else
+					{
+						nRes += pData->iDelta;
+					}
+
+					SendDlgItemMessage(hDlg, IDC_RESOLUTION, CB_SETCURSEL, nRes, 0);
+				}
+				break;
+			case IDC_SPIN_REFRESH:
+				{
+					// Refresh spinned
+
+					LPNMUPDOWN pData = (LPNMUPDOWN)lParam;
+
+					int nRes = SendDlgItemMessage(hDlg, IDC_REFRESH, CB_GETCURSEL, 0, 0);
+					int nCount = SendDlgItemMessage(hDlg, IDC_REFRESH, CB_GETCOUNT, 0, 0);
+
+					if(pData->iDelta < 0 && !nRes)
+					{
+						nRes = nCount - 1;
+					}
+					else if(pData->iDelta > 0 && nRes == (nCount - 1))
+					{
+						nRes = 0;
+					}
+					else
+					{
+						nRes += pData->iDelta;
+					}
+
+					SendDlgItemMessage(hDlg, IDC_REFRESH, CB_SETCURSEL, nRes, 0);
+				}
+				break;
+			}
+		}
+		break;
+	case WM_COMMAND:
+		{
+			switch(LOWORD(wParam))
+			{
+			case IDC_REFRESH:
+				{
+					if(HIWORD(wParam) != CBN_SELCHANGE) break;
+
+					pData->m_dwRefresh = SendDlgItemMessage(hDlg, IDC_REFRESH, CB_GETITEMDATA, SendDlgItemMessage(hDlg, IDC_REFRESH, CB_GETCURSEL, 0, 0), 0);
+				}
+				break;
+			case IDC_RESOLUTION:
+				{
+					if(HIWORD(wParam) != CBN_SELCHANGE) break;
+
+					// Get index of currently selected resolution
+
+					int nCurSel = SendDlgItemMessage(hDlg, IDC_RESOLUTION, CB_GETCURSEL, 0, 0);
+
+					// If no resolution selected, exit immediately
+
+					if(-1 == nCurSel) break;
+
+					// Clear refresh combo box
+
+					HWND hWndRefresh = GetDlgItem(hDlg, IDC_REFRESH);
+
+					SendMessage(hWndRefresh, CB_RESETCONTENT, 0, 0);
+
+					// Get selected format		
+
+					D3DDISPLAYMODE dmDesktop = {0};
+					pData->m_pD3D->GetAdapterDisplayMode(D3DADAPTER_DEFAULT, &dmDesktop);
+
+					int nFormatID = SendDlgItemMessage(hDlg, IDC_FORMAT, CB_GETCURSEL, 0, 0);
+
+					int nFormatStyle = SendDlgItemMessage(hDlg, IDC_FORMAT, CB_GETITEMDATA, nFormatID, 0);
+					BYTE* pbFormatStyle = (BYTE*)&nFormatStyle;
+
+					D3DFORMAT nFormat = nFormatID ? (D3DFORMAT)H2D_DW_THUDEVICEFORMATS[(int)pbFormatStyle[2]] : dmDesktop.Format;
+
+					// Get selected resolution width and height by decoding extra data
+
+					int nExtraData = SendDlgItemMessage(hDlg, IDC_RESOLUTION, CB_GETITEMDATA, nCurSel, 0);
+
+					DWORD dwWidth = (DWORD)LOWORD(nExtraData);
+					DWORD dwHeight = (DWORD)HIWORD(nExtraData);
+
+					// List refresh rates for selected format and resolution
+
+					DWORD dwModeCount = pData->m_pD3D->GetAdapterModeCount(D3DADAPTER_DEFAULT, nFormat);
+
+					D3DDISPLAYMODE dm = {0};
+
+					CThunderString str;
+
+					int nDefaultRefresh = -1;
+
+					int nIndex = -1;
+
+					bool bDesktopOnly = (SendDlgItemMessage(hDlg, IDC_FULLSCREEN, BM_GETCHECK, 0, 0) == BST_UNCHECKED);
+
+					if(bDesktopOnly)
+					{
+						nIndex = SendMessage(hWndRefresh, CB_ADDSTRING, 0, (LPARAM)L"Desktop");
+						SendMessage(hWndRefresh, CB_SETITEMDATA, nIndex, (LPARAM)dmDesktop.RefreshRate);
+					}
+
+					for(DWORD dwMode = 0; dwMode < dwModeCount; dwMode++)
+					{
+						pData->m_pD3D->EnumAdapterModes(D3DADAPTER_DEFAULT, nFormat, dwMode, &dm);
+
+						if(dm.Width == dwWidth && dm.Height == dwHeight)
+						{
+							str.Format(L"%d Hz", dm.RefreshRate);
+
+							nIndex = SendMessage(hWndRefresh, CB_ADDSTRING, 0, (LPARAM)str.GetBufferConst());
+
+							// Set extra data to refresh rate
+
+							SendMessage(hWndRefresh, CB_SETITEMDATA, nIndex, (LPARAM)dm.RefreshRate);
+
+							// See if this should be default
+
+							if(dm.RefreshRate == pData->m_dwRefresh)
+								nDefaultRefresh = nIndex;
+						}
+					}
+
+					// Set default refresh
+
+					if(bDesktopOnly || nDefaultRefresh == -1)
+					{
+						SendMessage(hWndRefresh, CB_SETCURSEL, 0, 0);
+					}
+					else
+					{
+						SendMessage(hWndRefresh, CB_SETCURSEL, nDefaultRefresh, 0);
+					}
+
+					pData->m_dwResWidth = dwWidth;
+					pData->m_dwResHeight = dwHeight;
+				}
+				break;
+			case IDC_FORMAT:
+				{
+					if(HIWORD(wParam) != CBN_SELCHANGE) break;
+
+					// Clear resolution combo box
+
+					HWND hWndResolution = GetDlgItem(hDlg, IDC_RESOLUTION);
+
+					SendMessage(hWndResolution, CB_RESETCONTENT, 0, 0);
+
+					// Get selected format						
+
+					D3DDISPLAYMODE dmDesktop = {0};
+					pData->m_pD3D->GetAdapterDisplayMode(D3DADAPTER_DEFAULT, &dmDesktop);
+
+					int nFormatID = SendDlgItemMessage(hDlg, IDC_FORMAT, CB_GETCURSEL, 0, 0);
+
+					// Decode format style from extra data
+
+					int nFormatStyle = SendDlgItemMessage(hDlg, IDC_FORMAT, CB_GETITEMDATA, nFormatID, 0);
+					BYTE* pbFormatStyle = (BYTE*)&nFormatStyle;
+
+					bool bFullScreen = pbFormatStyle[0] ? true : false;
+					bool bWindowed = pbFormatStyle[1] ? true : false;
+
+					// List all resolutions with selected format
+
+					D3DFORMAT nFormat = nFormatID ? (D3DFORMAT)H2D_DW_THUDEVICEFORMATS[(int)pbFormatStyle[2]] : dmDesktop.Format;
+
+					DWORD dwModeCount = pData->m_pD3D->GetAdapterModeCount(D3DADAPTER_DEFAULT, nFormat);						
+
+					int nDefaultRes = -1;
+					D3DDISPLAYMODE dm = {0};
+
+					DWORD dwLastWidth = 0;
+					DWORD dwLastHeight = 0;
+
+					CThunderString str;
+
+					for(DWORD dw = 0; dw < dwModeCount; dw++)
+					{
+						pData->m_pD3D->EnumAdapterModes(D3DADAPTER_DEFAULT, nFormat, dw, &dm);
+
+						if(dm.Width != dwLastWidth || dm.Height != dwLastHeight)
+						{
+							// Adapter modes repeat for each refresh rate, so filter out duplicates
+
+							dwLastWidth = dm.Width;
+							dwLastHeight = dm.Height;
+
+							str.Format(L"%dx%d", dm.Width, dm.Height);
+
+							if(abs(float(dm.Width)/float(dm.Height) - 4.0f/3.0f) >= 0.001f)
+								str += L" (wide)";
+
+							int nIndex = SendMessage(hWndResolution, CB_ADDSTRING, 0, (LPARAM)str.GetBufferConst());
+
+							// Encode resolution width and height in extra data
+
+							SendMessage(hWndResolution, CB_SETITEMDATA, nIndex, MAKELPARAM((WORD)dm.Width, (WORD)dm.Height));
+
+							// See if this should be default
+
+							if(nDefaultRes == -1 && dm.Height == pData->m_dwResHeight && dm.Width == pData->m_dwResWidth)
+								nDefaultRes = nIndex;
+						}
+					}
+
+					// Update full screen checkbox
+
+					HWND hWndFullScreen = GetDlgItem(hDlg, IDC_FULLSCREEN);
+
+					if(bFullScreen && !bWindowed)
+					{
+						// Set full screen checkbox and disable it
+
+						SendMessage(hWndFullScreen, BM_SETCHECK, BST_CHECKED, 0);
+
+						EnableWindow(hWndFullScreen, false);
+					}
+					else if(!bFullScreen && bWindowed)
+					{
+						// Clear full screen checkbox and disable it
+
+						SendMessage(hWndFullScreen, BM_SETCHECK, BST_UNCHECKED, 0);
+
+						EnableWindow(hWndFullScreen, false);
+					}
+					else
+					{
+						// Enable full screen checkbox
+
+						EnableWindow(hWndFullScreen, true);
+					}
+
+					// Select item with default index
+
+					if(nDefaultRes != -1)
+					{
+						SendMessage(hWndResolution, CB_SETCURSEL, nDefaultRes, 0);
+
+						// Send notification to update refresh rates
+
+						SendMessage(hDlg, WM_COMMAND, MAKEWPARAM(IDC_RESOLUTION, CBN_SELCHANGE), 0);
+					}
+
+					pData->m_nDevFormat = (THU_DEVICE_FORMATS)nFormatID;
+				}
+				break;
+			case IDC_FULLSCREEN:
+				{
+					if(HIWORD(wParam) != BN_CLICKED) break;
+
+					// If full screen not checked, disable refresh
+
+					SendMessage(hDlg, WM_COMMAND, MAKEWPARAM(IDC_RESOLUTION, CBN_SELCHANGE), 0);
+
+					if(SendDlgItemMessage(hDlg, IDC_FULLSCREEN, BM_GETCHECK, 0, 0) == BST_CHECKED)
+					{
+						EnableWindow(GetDlgItem(hDlg, IDC_REFRESH), true);
+						EnableWindow(GetDlgItem(hDlg, IDC_SPIN_REFRESH), true);
+					}
+					else
+					{
+						EnableWindow(GetDlgItem(hDlg, IDC_REFRESH), false);
+						EnableWindow(GetDlgItem(hDlg, IDC_SPIN_REFRESH), false);
+					}
+				}
+				break;
+			case IDC_VIDEO_ADVANCED:
+				{
+					// Display advanced video
+
+					if(pData->m_dialogVideo.Show(hDlg, pData->m_pD3D) == IDOK)
+					{
+						// Refresh
+
+						SendMessage(hDlg, WM_INITDIALOG, 0, 0);
+					}
+				}
+				break;
+			case IDC_AUDIO_ADVANCED:
+				{
+					// Display advanced audio
+
+					pData->m_dialogAudio.Show(hDlg);
+				}
+				break;
+			case IDC_STARTUP_ADVANCED:
+				{
+					// Display advanced startup
+
+					pData->m_dialogStartup.Show(hDlg);
+				}
+				break;
+			case IDSAVELAUNCH:
+			case IDSAVEEXIT:
+				{
+					// Save Settings
+
+					pData->m_pGame->SetDeviceType(pData->m_dialogVideo.GetDeviceType());
+					pData->m_pGame->SetDeviceFormat(pData->m_nDevFormat);
+					pData->m_pGame->SetResolutionWidth((int)pData->m_dwResWidth);
+					pData->m_pGame->SetResolutionHeight((int)pData->m_dwResHeight);
+					pData->m_pGame->SetRefreshRate(pData->m_dwRefresh);
+					pData->m_pGame->SetFullScreen(SendDlgItemMessage(hDlg, IDC_FULLSCREEN, BM_GETCHECK, 0, 0) == BST_CHECKED);
+					pData->m_pGame->SetPureDevice(pData->m_dialogVideo.GetPure());
+					pData->m_pGame->SetSoftwareVertexProcessing(pData->m_dialogVideo.GetSWVP());
+					pData->m_pGame->SetPureDevice(pData->m_dialogVideo.GetPure());
+					pData->m_pGame->SetVSync(SendDlgItemMessage(hDlg, IDC_VSYNC, BM_GETCHECK, 0, 0) == BST_CHECKED);
+
+					pData->m_pGame->GetEngine().SetOption(THU_OPTION_EXCLUSIVESOUND, pData->m_dialogAudio.GetExclusive());
+					pData->m_pGame->GetEngine().SetOption(THU_OPTION_DISABLESOUNDS, pData->m_dialogAudio.GetDisableSound());
+					pData->m_pGame->GetEngine().SetOption(THU_OPTION_DISABLEMUSIC, pData->m_dialogAudio.GetDisableMusic());
+
+					pData->m_pGame->SetEffectsVolume(float(SendDlgItemMessage(hDlg, IDC_SLIDER_EFFECTSVOLUME, TBM_GETPOS, 0, 0)) / 100.0f);
+					pData->m_pGame->SetSpeechVolume(float(SendDlgItemMessage(hDlg, IDC_SLIDER_SPEECHVOLUME, TBM_GETPOS, 0, 0)) / 100.0f);
+					pData->m_pGame->SetMusicVolume(float(SendDlgItemMessage(hDlg, IDC_SLIDER_MUSICVOLUME, TBM_GETPOS, 0, 0)) / 100.0f);
+
+					pData->m_pGame->SetLogMode(pData->m_dialogStartup.GetLogMode());
+
+					pData->m_pGame->SetShowConfigure(SendDlgItemMessage(hDlg, IDC_SHOWCONFIGURE, BM_GETCHECK, 0, 0) == BST_CHECKED);
+
+					pData->m_pGame->SetLogFilePath(pData->m_dialogStartup.GetLogFilePath());
+					pData->m_pGame->SetScriptPath(pData->m_dialogStartup.GetScriptPath());
+					pData->m_pGame->SetControlsProfilePath(pData->m_dialogStartup.GetControlsPath());
+
+					EndDialog(hDlg, LOWORD(wParam));
+				}
+				break;
+			case IDDISCARDLAUNCH:
+			case IDCANCEL:
+				{
+					// Discard
+
+					EndDialog(hDlg, LOWORD(wParam));
+				}
+				break;
+			}
+		}
+		break;
+	case WM_CLOSE:
+		{
+			// Discard
+
+			EndDialog(hDlg, IDCANCEL);
+		}
+		break;
+	case WM_DESTROY:
+		{
+			// Cleanup
+
+			pData->m_pD3D->Release();
+		}
+		break;
+	}
+
+	return false;
+}
+
+CHitman2DDialogError::CHitman2DDialogError(void): m_hErrorIcon(NULL),
+												  m_pszText(NULL),
+												  m_bNotAgain(false)
+{
+}
+
+CHitman2DDialogError::~CHitman2DDialogError(void)
+{
+}
+
+bool CHitman2DDialogError::GetNotAgain(void) const
+{
+	return m_bNotAgain;
+}
+
+int CHitman2DDialogError::Show(HWND hWndParent, LPCWSTR pszText)
+{
+	HINSTANCE hInstance = (HINSTANCE)GetModuleHandle(NULL);
+
+	if(!m_hErrorIcon)
+		m_hErrorIcon = (HICON)LoadImage(hInstance, (LPCWSTR)IDI_HITMAN2DERROR, IMAGE_ICON, 48, 48, LR_DEFAULTCOLOR);
+
+	m_pszText = pszText;
+
+	SetCursor(LoadCursor(hInstance, (LPCWSTR)IDC_ARROW));
+
+	while(!ShowCursor(true));
+
+	return DialogBoxParam((HINSTANCE)GetModuleHandle(NULL), (LPCWSTR)IDD_ERROR, hWndParent, (DLGPROC)DlgProc, (LPARAM)this);
+}
+
+LRESULT CALLBACK CHitman2DDialogError::DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	CHitman2DDialogError* pData = (CHitman2DDialogError*)GetWindowLong(hDlg, GWL_USERDATA);
+
+	switch(uMsg)
+	{
+	case WM_INITDIALOG:
+		{
+			_ASSERT(lParam);
+
+			SetWindowLong(hDlg, GWL_USERDATA, lParam);
+
+			pData = (CHitman2DDialogError*)lParam;
+
+			SetWindowText(GetDlgItem(hDlg, IDC_TEXT), pData->m_pszText);
+
+			// Resize the dialog down if required			
+
+			HDC hDC = GetDC(hDlg);
+
+			HGDIOBJ hOldFont = SelectObject(hDC, GetStockObject(DEFAULT_GUI_FONT));
+
+			LPCWSTR pszLine = pData->m_pszText;
+
+			int nMaxWidth = 0;
+			int nHeight = 0;
+
+			TEXTMETRIC tm;
+			GetTextMetrics(hDC, &tm);
+
+			for(;;)
+			{
+				LPCWSTR pszEndLine = wcschr(pszLine, L'\n');
+				if(!pszEndLine) pszEndLine = pszLine + wcslen(pszLine);
+
+				int nWidth = tm.tmAveCharWidth * (pszEndLine - pszLine - 1);
+
+				if(nMaxWidth < nWidth) nMaxWidth = nWidth;
+
+				nHeight += (tm.tmHeight + tm.tmExternalLeading);
+
+				if(!*pszEndLine) break;
+
+				pszLine = pszEndLine + 1;
+			}
+
+			SelectObject(hDC, hOldFont);
+
+			ReleaseDC(hDlg, hDC);
+
+			HWND hWndBox = GetDlgItem(hDlg, IDC_TEXT);
+
+			RECT rcBox;
+			GetClientRect(hWndBox, &rcBox);
+
+			RECT rcWindow;
+			GetWindowRect(hDlg, &rcWindow);
+
+			if(rcBox.right > nMaxWidth)
+			{
+				// Resize error description box
+
+				nMaxWidth += GetSystemMetrics(SM_CXEDGE) * 8;
+				nHeight += GetSystemMetrics(SM_CYEDGE) * 8;
+
+				RECT rcWindowBox;
+				GetWindowRect(hWndBox, &rcWindowBox);
+				ScreenToClient(hDlg, (LPPOINT)&rcWindowBox);
+
+				SetWindowPos(hWndBox, NULL, 0, 0, nMaxWidth, nHeight, SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOZORDER);
+
+				int nHeightDifference = nHeight - rcBox.bottom;
+
+				// Re-position the check box
+
+				HWND hWndCheckBox = GetDlgItem(hDlg, IDC_FUCKOFF);
+
+				RECT rcCheckBox;
+				GetWindowRect(hWndCheckBox, &rcCheckBox);
+				ScreenToClient(hDlg, (LPPOINT)&rcCheckBox);
+				ScreenToClient(hDlg, (LPPOINT)&rcCheckBox.right);
+
+				SetWindowPos(hWndCheckBox, 0, rcCheckBox.left, rcCheckBox.top + nHeightDifference, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER);
+
+				// Resize and reposition error dialog
+
+				int nNewWidth = nMaxWidth + rcWindowBox.top + rcWindowBox.left;
+
+				if(nNewWidth < rcCheckBox.right) nNewWidth = rcCheckBox.right;
+
+				int nNewHeight = rcWindow.bottom - rcWindow.top + nHeight - (rcBox.bottom - rcBox.top);
+
+				RECT rcDesktop;
+				SystemParametersInfo(SPI_GETWORKAREA, 0, &rcDesktop, false);				
+
+				MoveWindow(hDlg,
+						  ((rcDesktop.right - rcDesktop.left) - nNewWidth) / 2,
+						  ((rcDesktop.bottom - rcDesktop.top) - nNewHeight) / 2,
+						  nNewWidth,
+						  nNewHeight,
+						  false);
+
+				// Re-position the buttons
+
+				HWND hWndOK = GetDlgItem(hDlg, IDOK);
+				HWND hWndCopy = GetDlgItem(hDlg, IDCOPY);
+
+				RECT rcOK, rcCopy;
+
+				GetWindowRect(hWndOK, &rcOK);
+				GetWindowRect(hWndCopy, &rcCopy);
+
+				int nWidthOK = rcOK.right - rcOK.left;
+				int nWidthCopy = rcCopy.right - rcCopy.left;
+				int nSpaceBetween = rcCopy.left - rcOK.right;
+				int nDistBetween = rcCopy.left - rcOK.left;
+				int nTotalWidth = nWidthOK + nWidthCopy + nSpaceBetween;
+
+				ScreenToClient(hDlg, (LPPOINT)&rcOK);
+				ScreenToClient(hDlg, (LPPOINT)&rcCopy);
+
+				rcOK.left = (nNewWidth - nTotalWidth) / 2;
+				rcCopy.left = rcOK.left + nDistBetween;
+
+				SetWindowPos(hWndOK, 0, rcOK.left, rcOK.top + nHeightDifference, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER);
+				SetWindowPos(hWndCopy, 0, rcCopy.left, rcCopy.top + nHeightDifference, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER);
+			}
+
+			return true;
+		}
+		break;
+	case WM_CLOSE:
+		{
+			pData->m_bNotAgain = (SendDlgItemMessage(hDlg, IDC_FUCKOFF, BM_GETCHECK, 0, 0) == BST_CHECKED);
+
+			EndDialog(hDlg, IDOK);
+		}
+		break;
+	case WM_COMMAND:
+		{
+			switch(LOWORD(wParam))
+			{
+			case IDOK:
+				{
+					pData->m_bNotAgain = (SendDlgItemMessage(hDlg, IDC_FUCKOFF, BM_GETCHECK, 0, 0) == BST_CHECKED);
+
+					EndDialog(hDlg, IDOK);
+				}
+				break;
+			case IDCOPY:
+				{
+					SendDlgItemMessage(hDlg, IDC_TEXT, EM_SETSEL, 0, -1);
+					SendDlgItemMessage(hDlg, IDC_TEXT, WM_COPY, 0, 0);
+				}
+				break;
+			}
+		}
+		break;
+	case WM_PAINT:
+		{
+			PAINTSTRUCT ps = {0};
+			HDC hDC = BeginPaint(hDlg, &ps);
+
+			DrawIconEx(hDC, 12, 12, pData->m_hErrorIcon, 48, 48, 0, NULL, DI_IMAGE | DI_MASK);
+
+			EndPaint(hDlg, &ps);
+		}
+		break;
+	}
+
+	return false;
+}

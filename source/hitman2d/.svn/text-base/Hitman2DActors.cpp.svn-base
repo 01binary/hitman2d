@@ -1,0 +1,156 @@
+/*------------------------------------------------------------------*\
+|
+| Hitman2DActors.cpp
+|
+|-------------------------------------------------------------------
+|
+| Content: HiTMAN: 2D actor class(es) implementation
+| Created: 09/06/2007
+|
+|-------------------------------------------------------------------
+| Copyright © Valeriy Novytskyy
+\*------------------------------------------------------------------*/
+
+/*----------------------------------------------------------*\
+| Includes
+\*----------------------------------------------------------*/
+
+#include "stdafx.h"				// precompiled header
+#include "Hitman2DActors.h"		// defining actor class(es)
+#include "Hitman2DMaps.h"		// using map class(es)
+
+
+/*----------------------------------------------------------*\
+| CHitman2DActorProp implementation
+\*----------------------------------------------------------*/
+
+CHitman2DActorProp::CHitman2DActorProp(CThunderMap& rMap, LPCWSTR pszClass): CThunderActor(rMap, pszClass)
+{
+}
+
+CHitman2DActorProp::~CHitman2DActorProp(void)
+{
+}
+
+CHitman2DActorProp* CHitman2DActorProp::CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderMap* pMap)
+{
+	return new CHitman2DActorProp(*pMap, pszClass);
+}
+
+/*----------------------------------------------------------*\
+| CHitman2DActorPlayer implementation
+\*----------------------------------------------------------*/
+
+CHitman2DActorPlayer::CHitman2DActorPlayer(CThunderMap& rMap, LPCWSTR pszClass):
+										   CThunderActor(rMap, pszClass),
+										   m_fLastMoved(0.0f),
+										   m_fWalkingSpeed(0.0f),
+										   m_bWalking(false)
+{
+}
+
+CHitman2DActorPlayer::~CHitman2DActorPlayer(void)
+{
+}
+
+void CHitman2DActorPlayer::Update(void)
+{
+	if(m_rEngine.GetTimeDelta(m_fLastMoved) > 0.001f)
+	{
+		if(m_bWalking)
+		{
+			m_fWalkingSpeed += 0.001f;
+			if(m_fWalkingSpeed > 0.1f) m_fWalkingSpeed = 0.1f;
+		}
+		else
+		{
+			m_fWalkingSpeed -= 0.001f;
+			if(m_fWalkingSpeed < 0.0f) m_fWalkingSpeed = 0.0f;
+		}
+
+		if(m_fWalkingSpeed)
+		{		
+			CThunderTileVector vecWalkSpeed = m_vecWalkingDir * m_fWalkingSpeed;
+
+			SetPosition(m_vecPos + vecWalkSpeed);
+
+			vector<CThunderCollision> arCollisions;
+			arCollisions.reserve(8);
+
+			if(Collision(&arCollisions))
+			{
+				// Move back
+
+				CThunderTileVector vecPenetration;
+				vecPenetration = arCollisions[0].GetPenetration();
+
+				CThunderTileVector3 vecNewPos = m_vecPos + (vecPenetration - m_pSprite->GetTilePivot());
+
+				SetPosition(vecNewPos);
+
+				m_fWalkingSpeed = 0.0f;
+				m_bWalking = false;
+			}
+
+			m_vecLastPos = m_vecPos;
+
+			m_fLastMoved = m_rEngine.GetTime();
+
+			dynamic_cast<CHitman2DMap*>(&m_rMap)->SetDynamicShadowsDirty(true);
+		}
+	}
+}
+
+/*
+void CHitman2DActorPlayer::Render(void)
+{
+	if(!CThunderActor::Render()) return false;
+
+	WCHAR szPosition[256] = {0};
+
+	StringCchPrintf(szPosition, 256, L"%.4f, %.4f [ %.4f %.4f ]", m_vecPos.tx, m_vecPos.ty, m_vecPos.tx + m_pSprite->GetTilePivot().tx, m_vecPos.ty + m_pSprite->GetTilePivot().ty);
+
+	RECT rcText = { int(m_vrPixelPos.x), int(m_vrPixelPos.y), 0, 0 };
+
+	rcText.right = rcText.left + 512;
+	rcText.bottom = rcText.top + 32;
+
+	list<CThunderFont*>::iterator posFont = m_rEngine.GetFonts().GetFirstPos();
+
+	if(posFont != m_rEngine.GetFonts().GetLastPos()) (*posFont)->GetD3DXFont()->DrawText(m_rEngine.GetGraphics().GetD3DXSprite(), szPosition, wcslen(szPosition), &rcText, DT_LEFT, 0xFFFFFFFF);
+}
+*/
+
+void CHitman2DActorPlayer::OnKeyDown(int nKeyCode)
+{
+	switch(nKeyCode)
+	{
+	case 'W':
+		m_vecWalkingDir.Set(0.0f, -1.0f);
+		m_bWalking = true;
+		break;
+	case 'S':
+		m_vecWalkingDir.Set(0.0f, 1.0f);
+		m_bWalking = true;
+		break;
+	case 'A':
+		m_vecWalkingDir.Set(-1.0f, 0.0f);
+		m_bWalking = true;
+		break;
+	case 'D':
+		m_vecWalkingDir.Set(1.0f, 0.0f);
+		m_bWalking = true;
+		break;
+	}
+}
+
+void CHitman2DActorPlayer::OnKeyUp(int nKeyCode)
+{
+	if(m_bWalking && (nKeyCode == 'W' || nKeyCode == 'A' || nKeyCode == 'S' || nKeyCode == 'D'))
+		m_bWalking = false;
+}
+
+CHitman2DActorPlayer* CHitman2DActorPlayer::CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderMap* pMap)
+{
+	return new CHitman2DActorPlayer(*pMap, pszClass);
+}

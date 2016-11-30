@@ -1,0 +1,807 @@
+/*------------------------------------------------------------------*\
+|
+| Hitman2DMaps.cpp
+|
+|-------------------------------------------------------------------
+|
+| Content: HiTMAN: 2D map class(es) implementation
+| Created: 12/21/2007
+|
+|-------------------------------------------------------------------
+| Copyright © Valeriy Novytskyy
+\*------------------------------------------------------------------*/
+
+/*----------------------------------------------------------*\
+| Includes
+\*----------------------------------------------------------*/
+
+#include "stdafx.h"				// precompiled header
+#include "Hitman2DMaps.h"		// defining map class(es)
+
+
+/*----------------------------------------------------------*\
+| CHitman2DMap implementation
+\*----------------------------------------------------------*/
+
+CHitman2DMap::CHitman2DMap(CThunderEngine& rEngine, LPCWSTR pszClass): CThunderMap(rEngine, pszClass),
+																	   m_pEffect(NULL),
+																	   m_hWorldViewProj(NULL),
+																	   m_hShadowmapWidth(NULL),
+																	   m_hShadowmapHeight(NULL),
+																	   m_hShadowmapFactor(NULL),
+																	   m_hFillMode(NULL),
+																	   m_fShadowmapFactor(1.0f),
+																	   m_fShadowLengthFactor(1.0f),
+																	   m_clrDefaultShadowmapColor(0),
+
+																	   m_bDynamicShadowsDirty(false),
+
+																	   m_nDynamicShadows(0),
+																	   m_pDynamicShadowVB(NULL),
+																	   m_pDynamicShadowIB(NULL),
+
+																	   m_pShadowmap(NULL),
+																	   m_nShadowmapTileSize(512),
+																	   m_nShadowmapTilesX(0),
+																	   m_nShadowmapTilesY(0)
+{
+	// Set default light direction
+
+	m_vecLightDirection.Set(1.0f, 1.0f);
+	m_vecLightDirection.Normalize();
+
+	// Set shadowmap size
+
+	m_nShadowmapTileSize = 512;
+}
+
+CHitman2DMap::~CHitman2DMap(void)
+{
+	if(m_pEffect != NULL)
+		m_pEffect->Release();
+
+	if(m_pShadowmap != NULL)
+		m_pShadowmap->Release();
+
+	if(m_pDynamicShadowVB != NULL)
+		m_pDynamicShadowVB->Release();
+
+	if(m_pDynamicShadowIB != NULL)
+		m_pDynamicShadowIB->Release();
+}
+
+CHitman2DMap* CHitman2DMap::CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass)
+{
+	return new CHitman2DMap(rEngine, pszClass);
+}
+
+void CHitman2DMap::Update(void)
+{
+	CThunderMap::Update();
+
+	if(m_bDynamicShadowsDirty == true)
+		UpdateShadowmap();
+}
+
+void CHitman2DMap::Render(void)
+{
+	UINT uPasses = 0;
+
+	HRESULT hr = m_pEffect->Begin(&uPasses, 0);
+
+	if(FAILED(hr))
+	{
+		m_rEngine.Print(L"Failed to begin effect.", THU_PRINT_ERROR);
+		return;
+	}
+
+	hr = m_pEffect->BeginPass(0);
+
+	if(FAILED(hr))
+	{
+		m_rEngine.Print(L"Failed to begin effect pass.", THU_PRINT_ERROR);
+		return;
+	}
+
+	m_rEngine.GetGraphics().SetTexture(1, m_pShadowmap);
+
+	CThunderMap::Render();
+
+	m_rEngine.GetGraphics().FlushBatch();
+
+	hr = m_pEffect->EndPass();
+
+	if(FAILED(hr))
+	{
+		m_rEngine.Print(L"Failed to end effect pass.", THU_PRINT_ERROR);
+		return;
+	}
+
+	hr = m_pEffect->End();
+
+	if(FAILED(hr))
+	{
+		m_rEngine.Print(L"Failed to end effect.", THU_PRINT_ERROR);
+		return;
+	}
+
+	m_rEngine.GetGraphics().SetTexture(1, NULL);
+
+	return;
+}
+
+const CThunderTileVector& CHitman2DMap::GetLightDirectionConst(void) const
+{
+	return m_vecLightDirection;
+}
+
+CThunderTileVector& CHitman2DMap::GetLightDirection(void)
+{
+	return m_vecLightDirection;
+}
+
+void CHitman2DMap::SetLightDirection(const CThunderTileVector& rvecLightDirection)
+{
+	m_vecLightDirection = rvecLightDirection;
+}
+
+float CHitman2DMap::GetShadowmapFactor(void) const
+{
+	return m_fShadowmapFactor;
+}
+
+void CHitman2DMap::SetShadowmapFactor(float fShadowmapFactor)
+{
+	m_fShadowmapFactor = fShadowmapFactor;
+
+	if(m_pEffect)
+		m_pEffect->SetFloat(m_hShadowmapFactor, m_fShadowmapFactor);
+}
+
+float CHitman2DMap::GetShadowLengthFactor(void) const
+{
+	return m_fShadowLengthFactor;
+}
+
+void CHitman2DMap::SetShadowLengthFactor(float fShadowLengthFactor)
+{
+	m_fShadowLengthFactor = fShadowLengthFactor;
+
+	m_bDynamicShadowsDirty = true;
+}
+
+D3DCOLOR CHitman2DMap::GetDefaultShadowmapColor(void) const
+{
+	return m_clrDefaultShadowmapColor;
+}
+
+void CHitman2DMap::SetDefaultShadowmapColor(D3DCOLOR clrDefaultShadowmapColor)
+{
+	m_clrDefaultShadowmapColor = clrDefaultShadowmapColor;
+}
+
+int CHitman2DMap::GetShadowmapTileSize(void) const
+{
+	return m_nShadowmapTileSize;
+}
+
+void CHitman2DMap::SetShadowmapTileSize(int nShadowmapTileSize)
+{
+	m_nShadowmapTileSize = nShadowmapTileSize;
+
+	m_nShadowmapTilesX = ((m_tcx * m_rEngine.GetOption(THU_OPTION_TILESIZE))) / m_nShadowmapTileSize;
+	m_nShadowmapTilesY = ((m_tcy * m_rEngine.GetOption(THU_OPTION_TILESIZE))) / m_nShadowmapTileSize;
+
+	m_arShadowmapTiles.resize(GetShadowmapTileCount());
+}
+
+int CHitman2DMap::GetShadowmapTileCount(void) const
+{
+	return m_nShadowmapTilesX * m_nShadowmapTilesY;
+}
+
+CThunderTexture* CHitman2DMap::GetShadowmapTile(int nIndex)
+{
+	return m_arShadowmapTiles[nIndex];
+}
+
+void CHitman2DMap::SetShadowmapTile(int nIndex, CThunderTexture* pShadowmapTile)
+{
+	m_arShadowmapTiles[nIndex] = pShadowmapTile;
+}
+
+void CHitman2DMap::SetDynamicShadowsDirty(bool bDirty)
+{
+	m_bDynamicShadowsDirty = bDirty;
+}
+
+void CHitman2DMap::OnLostDevice(void)
+{
+	// Notify effect
+
+	HRESULT hr = m_pEffect->OnLostDevice();
+
+	if(FAILED(hr))
+		throw m_rEngine.GetErrors().Push(new CThunderErrorD3DXSpriteOnLostDevice(__FUNCTIONW__, hr));
+
+	// Destroy shadowmap
+
+	if(m_pShadowmap != NULL)
+		m_pShadowmap->Release();
+
+	if(m_pDynamicShadowVB != NULL)
+		m_pDynamicShadowVB->Release();
+
+	if(m_pDynamicShadowIB != NULL)
+		m_pDynamicShadowIB->Release();
+}
+
+void CHitman2DMap::OnResetDevice(void)
+{
+	// Notify effect
+
+	HRESULT hr = m_pEffect->OnResetDevice();
+
+	if(FAILED(hr))
+		throw m_rEngine.GetErrors().Push(new CThunderErrorD3DXSpriteOnResetDevice(__FUNCTIONW__, hr));
+
+	// Re-create shadowmap
+
+	CreateShadowmap();
+}
+
+void CHitman2DMap::OnUpdateCamera(void)
+{
+	UpdateShadowmap();
+}
+
+void CHitman2DMap::OnMouseLDown(POINT pt)
+{
+	CThunderMap::OnMouseLDown(pt);
+
+	if(m_rEngine.GetScreensConst().GetActiveScreen())
+		m_rEngine.GetScreens().SetActiveScreen(NULL);
+
+	if(m_rEngine.GetScreensConst().GetFocusScreen())
+		m_rEngine.GetScreens().SetFocusScreen(NULL);
+}
+
+void CHitman2DMap::OnMouseRDown(POINT pt)
+{
+	CThunderMap::OnMouseRDown(pt);
+
+	if(m_rEngine.GetScreensConst().GetActiveScreen())
+		m_rEngine.GetScreens().SetActiveScreen(NULL);
+
+	if(m_rEngine.GetScreensConst().GetFocusScreen())
+		m_rEngine.GetScreens().SetFocusScreen(NULL);
+}
+
+void CHitman2DMap::OnMouseMDown(POINT pt)
+{
+	CThunderMap::OnMouseMDown(pt);
+
+	if(m_rEngine.GetScreensConst().GetActiveScreen())
+		m_rEngine.GetScreens().SetActiveScreen(NULL);
+
+	if(m_rEngine.GetScreensConst().GetFocusScreen())
+		m_rEngine.GetScreens().SetFocusScreen(NULL);
+}
+
+void CHitman2DMap::SerializeUserData(CThunderStream& rStream, bool bInstance) const
+{
+	if(bInstance)
+	{
+		//
+		// Write map instance data
+		//
+
+		// Write light direction
+
+		m_vecLightDirection.Serialize(rStream);
+
+		// Write shadow length factor
+
+		rStream.WriteVar(&m_fShadowLengthFactor);
+
+		// Write shadowmap factor
+
+		rStream.WriteVar(&m_fShadowmapFactor);
+	}
+	else
+	{
+		//
+		// Write map data
+		//
+
+		// Write shadowmap tile size
+
+		rStream.WriteVar(&m_nShadowmapTileSize);
+
+		// Write shadowmap texture instances
+
+		for(vector<CThunderTexture*>::const_iterator pos = m_arShadowmapTiles.begin();
+			pos != m_arShadowmapTiles.end();
+			pos++)
+		{
+			if(!*pos)
+				CThunderTexture::SerializeNullInstance(rStream);
+			else
+				(*pos)->SerializeInstance(rStream);
+		}
+	}
+}
+
+void CHitman2DMap::DeserializeUserData(CThunderStream& rStream, bool bInstance)
+{
+	if(bInstance)
+	{
+		//
+		// Read map instance data
+		//
+
+		// Read light direction
+
+		m_vecLightDirection.Deserialize(rStream);
+
+		// Read shadow length factor
+
+		rStream.ReadVar(&m_fShadowLengthFactor);
+
+		// Read shadowmap factor
+
+		rStream.ReadVar(&m_fShadowmapFactor);
+	}
+	else
+	{
+		//
+		// Read map data
+		//
+
+		// Read shadowmap tile size
+
+		rStream.ReadVar(&m_nShadowmapTileSize);
+
+		// Calculate total number of shadowmap tiles required to cover the whole map
+
+		m_nShadowmapTilesX = ((m_tcx * m_rEngine.GetOption(THU_OPTION_TILESIZE))) / m_nShadowmapTileSize;
+		m_nShadowmapTilesY = ((m_tcy * m_rEngine.GetOption(THU_OPTION_TILESIZE))) / m_nShadowmapTileSize;
+
+		int nTotalShadowmapTiles = GetShadowmapTileCount();
+
+		// Read shadowmap texture instances
+
+		m_arShadowmapTiles.resize(nTotalShadowmapTiles);
+
+		for(int n = 0; n < nTotalShadowmapTiles; n++)
+		{
+			m_arShadowmapTiles[n] = m_rEngine.GetTextures().LoadInstance(rStream);
+		}
+
+		// Load shadow mapping shader (in the future, shaders will be attached to individual objects)
+
+		WCHAR szEffectPath[MAX_PATH] = {0};
+		wcscpy_s(szEffectPath, m_rEngine.GetBaseDirectory());
+		PathAddBackslash(szEffectPath);
+		wcscat_s(szEffectPath, L"shaders\\diffuse-shadow.fx");
+
+		HRESULT hr = D3DXCreateEffectFromFile(m_rEngine.GetGraphics().GetDevice(), szEffectPath, NULL, NULL, 0, NULL, &m_pEffect, NULL);
+
+		if(FAILED(hr))
+			throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidPtr(__FUNCTIONW__, L"m_pEffect"));
+
+		// Get handles to its parameters
+
+		m_hWorldViewProj = m_pEffect->GetParameterByName(NULL, "worldviewproj");
+		m_hShadowmapFactor = m_pEffect->GetParameterByName(NULL, "shadowmapfactor");
+		m_hFillMode = m_pEffect->GetParameterByName(NULL, "fillmode");
+
+		// Set initial parameters
+
+		m_pEffect->SetFloat(m_hShadowmapFactor, m_fShadowmapFactor);
+
+		D3DXMATRIX mtxViewProj;
+		D3DXMatrixOrthoOffCenterLH(&mtxViewProj,
+								   0.5f,
+								   float(m_rEngine.GetGraphics().GetDeviceParams().BackBufferWidth) + 0.5f,
+								   float(m_rEngine.GetGraphics().GetDeviceParams().BackBufferHeight) + 0.5f,
+								   0.5f,
+								   0.0f,
+								   1.0f);
+
+		m_pEffect->SetMatrix(m_hWorldViewProj, &mtxViewProj);
+	}
+}
+
+void CHitman2DMap::CreateShadowmap(void)
+{
+	// Release previous shadowmap if any
+
+	if(m_pShadowmap) m_pShadowmap->Release();
+
+	// Create a new shadowmap the size of area visible in camera
+
+	SIZE psCamera;
+	m_vecCamSize.ToSize(m_rEngine.GetOption(THU_OPTION_TILESIZE), psCamera);
+
+	m_psShadowmapSize.cx = MultipleOfTwo(psCamera.cx);
+	m_psShadowmapSize.cy = MultipleOfTwo(psCamera.cy);
+
+	HRESULT hr = m_rEngine.GetGraphics().GetDevice()->CreateTexture(m_psShadowmapSize.cx,
+													  m_psShadowmapSize.cy,
+													  1,
+													  D3DUSAGE_RENDERTARGET,
+													  m_rEngine.GetGraphics().GetDeviceParams().BackBufferFormat == D3DFMT_X8R8G8B8 ? D3DFMT_A8R8G8B8 : D3DFMT_A1R5G5B5,
+													  D3DPOOL_DEFAULT,
+													  &m_pShadowmap,
+													  NULL);
+
+	if(FAILED(hr))
+		throw m_rEngine.GetErrors().Push(new CThunderErrorD3DDeviceCreateTexture(__FUNCTIONW__, hr));
+
+	// Set shadowmap shader constants
+
+	if(m_pEffect)
+	{
+		m_pEffect->SetFloat("shadowmapwidth", float(m_psShadowmapSize.cx));
+		m_pEffect->SetFloat("shadowmapheight", float(m_psShadowmapSize.cy));
+	}
+}
+
+void CHitman2DMap::UpdateShadowmap(void)
+{
+	// Create master shadowmap texture if not created
+
+	if(NULL == m_pShadowmap)
+		CreateShadowmap();
+
+	// Set device states for solid rendering
+
+	m_rEngine.GetGraphics().SetRenderState(D3DRS_FILLMODE, D3DFILL_SOLID);
+	m_rEngine.GetGraphics().SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+	m_rEngine.GetGraphics().SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_DIFFUSE);
+	m_rEngine.GetGraphics().SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
+	m_rEngine.GetGraphics().SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+	m_rEngine.GetGraphics().SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_DIFFUSE);
+	m_rEngine.GetGraphics().SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE);
+
+	// Set the master shadowmap as render target
+
+	LPDIRECT3DSURFACE9 pShadowmapSurf = NULL;
+	LPDIRECT3DSURFACE9 pOldRenderTargetSurf = NULL;
+
+	HRESULT hr = m_pShadowmap->GetSurfaceLevel(0, &pShadowmapSurf);
+
+	if(FAILED(hr))
+		throw m_rEngine.GetErrors().Push(new CThunderErrorD3DTextureGetSurfaceLevel(__FUNCTIONW__, hr));
+
+	hr = m_rEngine.GetGraphics().GetDevice()->GetRenderTarget(0, &pOldRenderTargetSurf);
+
+	if(FAILED(hr))
+		throw m_rEngine.GetErrors().Push(new CThunderErrorD3DDeviceGetRenderTarget(__FUNCTIONW__, hr));
+
+	hr = m_rEngine.GetGraphics().GetDevice()->SetRenderTarget(0, pShadowmapSurf);
+
+	if(FAILED(hr))
+		throw m_rEngine.GetErrors().Push(new CThunderErrorD3DDeviceGetRenderTarget(__FUNCTIONW__, hr));
+
+	// Render shadow map
+
+	m_rEngine.GetGraphics().Clear(m_clrDefaultShadowmapColor);
+
+	m_rEngine.GetGraphics().BeginScene();
+
+	RenderStaticShadows();
+	
+	RenderDynamicShadows();
+
+	m_rEngine.GetGraphics().EndScene();
+
+	// Restore render target
+
+	hr = m_rEngine.GetGraphics().GetDevice()->SetRenderTarget(0, pOldRenderTargetSurf);
+
+	if(FAILED(hr))
+		throw m_rEngine.GetErrors().Push(new CThunderErrorD3DDeviceSetRenderTarget(__FUNCTIONW__, hr));
+
+	pOldRenderTargetSurf->Release();
+	pShadowmapSurf->Release();
+}
+
+void CHitman2DMap::RenderStaticShadows(void)
+{
+	// Determine which static shadowmap tiles to render
+
+	POINT ptCameraPos;
+	m_vecCamPos.ToPoint(m_rEngine.GetOption(THU_OPTION_TILESIZE), ptCameraPos);
+
+	SIZE psCameraSize;
+	m_vecCamSize.ToSize(m_rEngine.GetOption(THU_OPTION_TILESIZE), psCameraSize);
+
+	int nFirstShadowmapTileX = ptCameraPos.x / m_nShadowmapTileSize;
+	int nFirstShadowmapTileY = ptCameraPos.y / m_nShadowmapTileSize;
+
+	if(nFirstShadowmapTileX < 0)
+		nFirstShadowmapTileX = 0;
+	else if(nFirstShadowmapTileX >= m_nShadowmapTilesX)
+		nFirstShadowmapTileX = m_nShadowmapTilesX - 1;
+
+	if(nFirstShadowmapTileY < 0)
+		nFirstShadowmapTileY = 0;
+	else if(nFirstShadowmapTileY >= m_nShadowmapTilesY)
+		nFirstShadowmapTileY = m_nShadowmapTilesY - 1;
+
+	int nLastShadowmapTileX = (ptCameraPos.x + psCameraSize.cx) / m_nShadowmapTileSize;
+	int nLastShadowmapTileY = (ptCameraPos.y + psCameraSize.cy) / m_nShadowmapTileSize;
+
+	if(nLastShadowmapTileX < 0)
+		nLastShadowmapTileX = 0;
+	else if(nLastShadowmapTileX >= m_nShadowmapTilesX)
+		nLastShadowmapTileX = m_nShadowmapTilesX - 1;
+
+	if(nLastShadowmapTileY < 0)
+		nLastShadowmapTileY = 0;
+	else if(nLastShadowmapTileY >= m_nShadowmapTilesY)
+		nLastShadowmapTileY = m_nShadowmapTilesY - 1;
+
+	// Render static shadowmap tiles
+
+	m_rEngine.GetGraphics().SetRenderState(D3DRS_ALPHABLENDENABLE, false);
+
+	m_rEngine.GetGraphics().BeginBatch();
+
+	D3DXVECTOR3 vrOffset(float(nFirstShadowmapTileX * m_nShadowmapTileSize - ptCameraPos.x),
+						 float(nFirstShadowmapTileY * m_nShadowmapTileSize - ptCameraPos.y),
+						 0.0f);
+
+	for(int nShadowmapTileY = nFirstShadowmapTileY; nShadowmapTileY <= nLastShadowmapTileY; nShadowmapTileY++)
+	{
+		for(int nShadowmapTileX = nFirstShadowmapTileX; nShadowmapTileX <= nLastShadowmapTileX; nShadowmapTileX++)
+		{
+			int nShadowmapTileIndex = m_nShadowmapTilesX * nShadowmapTileY + nShadowmapTileX;
+
+			m_rEngine.GetGraphics().RenderQuad(m_arShadowmapTiles[nShadowmapTileIndex]->GetD3DTexture(), vrOffset);
+
+			vrOffset.x += float(m_nShadowmapTileSize);
+		}
+
+		vrOffset.x = float(nFirstShadowmapTileX * m_nShadowmapTileSize - ptCameraPos.x);
+		vrOffset.y += float(m_nShadowmapTileSize);
+	}
+
+	m_rEngine.GetGraphics().EndBatch();
+
+	m_rEngine.GetGraphics().SetRenderState(D3DRS_ALPHABLENDENABLE, true);
+}
+
+void CHitman2DMap::RenderDynamicShadows(void)
+{
+	if(m_bDynamicShadowsDirty) 
+		m_bDynamicShadowsDirty = false;
+
+	HRESULT hr = 0;
+
+	// Update dynamic shadows vertex & index buffer
+
+	struct SHADOWVERTEX
+	{
+		float x, y, z, rhw; 
+		float tu, tv;
+		D3DCOLOR diffuse;
+	};
+
+	int nDynamicShadows = m_arCachedActors.GetCount();
+
+	if(m_nDynamicShadows < nDynamicShadows)
+	{
+		if(!m_nDynamicShadows)
+			m_nDynamicShadows = max(16, nDynamicShadows);
+		else
+			m_nDynamicShadows = nDynamicShadows;
+
+		if(m_pDynamicShadowVB) m_pDynamicShadowVB->Release();
+
+		hr = m_rEngine.GetGraphics().GetDevice()->CreateVertexBuffer(
+			sizeof(SHADOWVERTEX) * m_nDynamicShadows * 4,
+			D3DUSAGE_DYNAMIC | D3DUSAGE_WRITEONLY,
+			D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX1,
+			D3DPOOL_DEFAULT,
+			&m_pDynamicShadowVB, NULL);
+
+		if(FAILED(hr))
+			throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidPtr(__FUNCTIONW__, L"m_pDynamicShadowVB"));
+
+		if(m_pDynamicShadowIB != NULL)
+			m_pDynamicShadowIB->Release();
+
+		hr = m_rEngine.GetGraphics().GetDevice()->CreateIndexBuffer(
+			sizeof(WORD) * m_nDynamicShadows * 6,
+			D3DUSAGE_DYNAMIC | D3DUSAGE_WRITEONLY,
+			D3DFMT_INDEX16,
+			D3DPOOL_DEFAULT,
+			&m_pDynamicShadowIB,
+			NULL);
+
+		if(FAILED(hr))
+			throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidPtr(__FUNCTIONW__, L"m_pDynamicShadowIB"));
+
+		if(m_nDynamicShadows)
+		{
+			const WORD INDICES[6] = { 2, 3, 0, 0, 1, 2 };
+
+			WORD* pwIndices = NULL;
+
+			hr = m_pDynamicShadowIB->Lock(0, sizeof(WORD) * m_nDynamicShadows, (void**)&pwIndices, D3DLOCK_DISCARD);
+
+			if(FAILED(hr))
+				throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidPtr(__FUNCTIONW__, L"pwIndices"));
+
+			for(WORD* pwEnd = pwIndices + m_nDynamicShadows * 6; pwIndices != pwEnd; pwIndices += 6)
+				CopyMemory(pwIndices, INDICES, sizeof(INDICES));
+
+			m_pDynamicShadowIB->Unlock();
+		}
+	}
+
+	if(nDynamicShadows)
+	{
+		// Calculate dynamic shadows
+
+		SHADOWVERTEX* pvtxDynamicShadows = new SHADOWVERTEX[m_nDynamicShadows * 4];
+
+		if(!pvtxDynamicShadows)
+			throw CThunderErrorMemAlloc(__FUNCTIONW__, sizeof(SHADOWVERTEX) * 4);
+
+		CThunderTileVector vecLightDirPerp = m_vecLightDirection.Perpendicular();
+		CThunderTileVector vecBegin[4];
+		CThunderTileVector vecEnd[4];
+
+		float fDots[4];
+		int nDotMinIndex = 0;
+		int nDotMaxIndex = 0;
+
+		const float BASE_HEIGHT = 0.0f;
+
+		SHADOWVERTEX* pvtxCurDynamicShadow = pvtxDynamicShadows;
+
+		for(vector<CThunderActor*>::iterator pos = m_arCachedActors.GetFirstPos();
+			pos != m_arCachedActors.GetLastPos();
+			pos++, pvtxCurDynamicShadow += 4)
+		{
+			CThunderActor* pActor = (*pos);
+			if(!pActor) continue;
+
+			vecBegin[0].tx = (*pos)->GetScreenPosition().x;
+			vecBegin[0].ty = (*pos)->GetScreenPosition().y + float((*pos)->GetSprite()->GetSize().cy) - BASE_HEIGHT;
+
+			vecBegin[1].tx = (*pos)->GetScreenPosition().x + float((*pos)->GetSprite()->GetSize().cx);
+			vecBegin[1].ty = (*pos)->GetScreenPosition().y + float((*pos)->GetSprite()->GetSize().cy) - BASE_HEIGHT;
+
+			vecBegin[2].tx = (*pos)->GetScreenPosition().x + float((*pos)->GetSprite()->GetSize().cx);
+			vecBegin[2].ty = (*pos)->GetScreenPosition().y + float((*pos)->GetSprite()->GetSize().cy);
+
+			vecBegin[3].tx = (*pos)->GetScreenPosition().x;
+			vecBegin[3].ty = (*pos)->GetScreenPosition().y + float((*pos)->GetSprite()->GetSize().cy);
+
+			for(int n = 0; n < 4; n++)
+			{
+				vecEnd[n].tx = vecBegin[n].tx + m_vecLightDirection.tx * float((*pos)->GetSprite()->GetSize().cx) * m_fShadowLengthFactor;
+				vecEnd[n].ty = vecBegin[n].ty + m_vecLightDirection.ty * float((*pos)->GetSprite()->GetSize().cy) * m_fShadowLengthFactor;
+
+				fDots[n] = vecEnd[n].Dot(vecLightDirPerp);
+
+				if(n)
+				{
+					// Min?
+
+					if(fDots[n] < fDots[nDotMinIndex])
+						nDotMinIndex = n;
+
+					// Max?
+
+					if(fDots[n] > fDots[nDotMaxIndex])
+						nDotMaxIndex = n;
+				}
+			}
+
+			pvtxCurDynamicShadow[0].x = vecBegin[nDotMinIndex].tx;
+			pvtxCurDynamicShadow[0].y = vecBegin[nDotMinIndex].ty;
+			pvtxCurDynamicShadow[0].z = (*pos)->GetScreenPosition().z;
+			pvtxCurDynamicShadow[0].rhw = 1.0f;
+			pvtxCurDynamicShadow[0].tu = 0.0f;
+			pvtxCurDynamicShadow[0].tv = 1.0f;
+			pvtxCurDynamicShadow[0].diffuse = D3DCOLOR_ARGB(100, 0, 0, 0);
+
+			pvtxCurDynamicShadow[1].x = vecBegin[nDotMaxIndex].tx;
+			pvtxCurDynamicShadow[1].y = vecBegin[nDotMaxIndex].ty;
+			pvtxCurDynamicShadow[1].z = (*pos)->GetScreenPosition().z;
+			pvtxCurDynamicShadow[1].rhw = 1.0f;
+			pvtxCurDynamicShadow[1].tu = 1.0f;
+			pvtxCurDynamicShadow[1].tv = 1.0f;
+			pvtxCurDynamicShadow[1].diffuse = D3DCOLOR_ARGB(100, 0, 0, 0);
+
+			pvtxCurDynamicShadow[2].x = vecEnd[nDotMaxIndex].tx;
+			pvtxCurDynamicShadow[2].y = vecEnd[nDotMaxIndex].ty;
+			pvtxCurDynamicShadow[2].z = (*pos)->GetScreenPosition().z;
+			pvtxCurDynamicShadow[2].rhw = 1.0f;
+			pvtxCurDynamicShadow[2].tu = 1.0f;
+			pvtxCurDynamicShadow[2].tv = 0.0f;
+			pvtxCurDynamicShadow[2].diffuse = D3DCOLOR_ARGB(100, 0, 0, 0);
+
+			pvtxCurDynamicShadow[3].x = vecEnd[nDotMinIndex].tx;
+			pvtxCurDynamicShadow[3].y = vecEnd[nDotMinIndex].ty;
+			pvtxCurDynamicShadow[3].z = (*pos)->GetScreenPosition().z;
+			pvtxCurDynamicShadow[3].rhw = 1.0f;
+			pvtxCurDynamicShadow[3].tu = 0.0f;
+			pvtxCurDynamicShadow[3].tv = 0.0f;
+			pvtxCurDynamicShadow[3].diffuse = D3DCOLOR_ARGB(100, 0, 0, 0);
+		}
+
+		// Copy them to vertex buffer and free memory
+
+		SHADOWVERTEX* pvtxDynamicShadowsVB = NULL;
+
+		hr = m_pDynamicShadowVB->Lock(0, 0, (void**)&pvtxDynamicShadowsVB, D3DLOCK_DISCARD);
+
+		if(FAILED(hr))
+			throw m_rEngine.GetErrors().Push(new CThunderErrorInvalidPtr(__FUNCTIONW__, L"pvtxDynamicShadowsVB"));
+
+		CopyMemory(pvtxDynamicShadowsVB, pvtxDynamicShadows, sizeof(SHADOWVERTEX) * m_nDynamicShadows * 4);
+
+		m_pDynamicShadowVB->Unlock();
+
+		delete[] pvtxDynamicShadows;
+
+		// Render dynamic shadows
+
+		m_rEngine.GetGraphics().SetRenderState(D3DRS_ALPHABLENDENABLE, true);
+
+		m_rEngine.GetGraphics().SetFVF(D3DFVF_XYZRHW | D3DFVF_TEX1 | D3DFVF_DIFFUSE);
+
+		m_rEngine.GetGraphics().GetDevice()->SetIndices(m_pDynamicShadowIB);
+
+		m_rEngine.GetGraphics().GetDevice()->SetStreamSource(0, m_pDynamicShadowVB, 0, sizeof(SHADOWVERTEX));
+
+		vector<CThunderActor*>::iterator pos = m_arCachedActors.GetFirstPos();
+
+		CThunderTexture* pCurTex = (*pos++)->GetAnimationInstance().GetAnimationConst()->GetTexture();
+		CThunderTexture* pTex = NULL;
+
+		int nIndex = 0;
+		int nLastIndex = 0;
+		int nCount = 0;
+
+		if(nDynamicShadows > 1)
+		{
+			for(; pos != m_arCachedActors.GetLastPos();	pos++, nIndex++)
+			{
+				pTex = (*pos)->GetAnimationInstance().GetAnimationConst()->GetTexture();
+
+				if(pCurTex != pTex)
+				{
+					m_rEngine.GetGraphics().SetTexture(0, pCurTex->GetD3DTexture());
+					
+					nCount = nIndex - nLastIndex + 1;
+					
+					m_rEngine.GetGraphics().GetDevice()->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, nLastIndex * 4, 0, 4 * nCount, nLastIndex * 6, 2 * nCount);
+
+					nLastIndex = nIndex + 1;
+
+					pCurTex = pTex;
+				}
+			}
+		}
+		else
+		{
+			pTex = pCurTex;
+		}
+
+		nCount = nIndex - nLastIndex + 1;
+
+		m_rEngine.GetGraphics().SetTexture(0, pTex->GetD3DTexture());
+
+		m_rEngine.GetGraphics().GetDevice()->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, nLastIndex * 4, 0, 4 * nCount, nLastIndex * 6, 2 * nCount);
+
+		m_rEngine.GetGraphics().SetTexture(0, NULL);
+	}
+}

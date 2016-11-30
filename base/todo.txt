@@ -1,0 +1,35 @@
+HiTMAN: 2D To Do List
+
+* Complete New Game GUI Screen
+	- Design new icons for the 3 difficulty levels, export and use
+
+* Complete the Options GUI Screen
+	- Pull a previously designed background image for the Options screen and update, then export.
+
+* Complete the Level/Map loading code
+	- Changes to reflect merging of TileStatic and TileAnimated into one Tile class
+	- Update mechanism for displaying animated map tiles
+	- Changes to reflect rendering of the level from a Camera, with each level having a list of Cameras
+	- Changes to reflect rendering of levels using a list of Active Cameras owned by the Engine instead of the Map class
+		- Support any number of active cameras, with may view the same level or different levels, viewing any part of them
+	- Create a mechanism for zooming in/out using the cameras, update code for tracking and panning
+	- Create a mechanism for clipping area viewed in the camera to the camera rectangle bounds
+	- Update code that accesses level database to determine which objects and tiles are currently visible in the camera, and make sure proper notifications are sent to objects as they enter and exit camera view space
+	- Update code that caches which objects are displayed in which cameras
+	- Actors need to update code that calculates collision bounds and loads collision info from a sprite associated with the actor
+	- Create a mechanism for determining which camera view a sound effect was generated in, to have ability to apply special sound effects to certain camera views
+	- Debug and test the Layers mechanism which supports multiple areas within a level, all possibly occupying the same x/y space but arranged on a logical Z axis.
+		- Need mechanism for hiding and displaying layers based on camera's Z view range
+
+That's as far as I dare plan, probably enough for 2011. Next steps will be updating collision detection code, updating physics, advanced shader effects, game play and AI code, more GUI for the mission objectives and HUD, a level and mission editor, etc.
+
+
+For animated tiles, we need to know if they are visible otherwise maybe we shouldn't keep animating,etc
+
+Need to implement shortcut menus with multiple levels.
+
+
+Menu, Ribbon, Dock Palette, Property Sheet, ListView
+
+
+Need to implement custom file open and save dialogs.

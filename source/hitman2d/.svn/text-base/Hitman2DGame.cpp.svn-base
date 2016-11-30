@@ -1,0 +1,6011 @@
+/*------------------------------------------------------------------*\
+|
+| Hitman2DGame.cpp
+|
+|-------------------------------------------------------------------
+|
+| Content: HiTMAN: 2D game class implementation
+| Created: 06/30/2007
+|
+|-------------------------------------------------------------------
+| Copyright © Valeriy Novytskyy
+\*------------------------------------------------------------------*/
+
+/*----------------------------------------------------------*\
+| Includes
+\*----------------------------------------------------------*/
+
+#include "stdafx.h"				// precompiled header
+#include "resource.h"			// using resource constants
+#include "Hitman2DGame.h"		// defining CHitman2DGame, using CThunderTheme from above include
+#include "Hitman2DActors.h"		// using CHitman2DActorPlayer
+#include "Hitman2DMaps.h"		// using CHitman2DMap
+#include "Hitman2DError.h"		// using H2D_ERRORS
+#include "Hitman2DDialogs.h"	// using ConfigDialogProc
+#include "Hitman2DGlobals.h"	// using global constants and functions
+#include "typeinfo.h"			// using RTTI
+#include <psapi.h>				// using GetProcessMemoryInfo
+#include <shellapi.h>			// using ShellExecute
+
+
+/*----------------------------------------------------------*\
+| Constants
+\*----------------------------------------------------------*/
+
+// Required engine version
+
+const BYTE H2D_REQUIRED_ENGINE_VERSION[] =				{ 2, 1, 0, 0 };
+
+// Command line switches
+
+const WCHAR H2D_SZ_CMDSWITCH_PROFILE[] =				L"/profile";
+const WCHAR H2D_SZ_CMDSWITCH_CONFIGURE[] =				L"/configure";
+
+// Settings
+
+const WCHAR H2D_SZ_PROFILE_SECTION_AUDIO[] =			L"audio";
+const WCHAR H2D_SZ_PROFILE_KEY_MUSICVOLUME[] =			L"musicvolume";
+const WCHAR H2D_SZ_PROFILE_KEY_EFFECTSVOLUME[] =		L"effectsvolume";
+const WCHAR H2D_SZ_PROFILE_KEY_SPEECHVOLUME[] =			L"speechvolume";
+const WCHAR H2D_SZ_PROFILE_SECTION_STARTUP[] =			L"startup";
+const WCHAR H2D_SZ_PROFILE_KEY_SCRIPT[] =				L"scriptpath";
+const WCHAR H2D_SZ_PROFILE_KEY_CONTROLS[] =				L"controlspath";
+const WCHAR H2D_SZ_PROFILE_KEY_SHOWCONFIGURE[] =		L"showconfigure";
+
+const LPCWSTR H2D_SZ_ERRORS[] =						{
+														L"Failed to initialize: 0x%x is invalid engine version, 0x%x required."
+													};
+
+const LPCWSTR H2D_SZ_LOGMODES[] =					{
+														L"disable",
+														L"text",
+														L"html"
+													};
+
+const LPCWSTR H2D_SZ_CONTROLS[] =					{
+														L"game.pause",
+														L"game.screenshot",
+														L"debug.console",
+														L"debug.exit",
+														L"debug.fillmode",
+														L"debug.test",
+														L"editor.cameraup",
+														L"editor.cameradown",
+														L"editor.cameraleft",
+														L"editor.cameraright"
+													};
+
+const int H2D_N_CONTROL_DEFAULTS[] =				{
+														VK_PAUSE,	// default: pause key
+														VK_F9,		// default: F9
+														VK_OEM_3,	// default: ~
+														0,			// default: none
+														'T',		// default: T
+														0,			// default: none
+														VK_UP,		// default: up arrow
+														VK_DOWN,	// default: down arrow
+														VK_LEFT,	// default: left arrow
+														VK_RIGHT	// default: right arrow
+													};
+
+const D3DCOLOR H2D_LOG_COLORS[] =					{
+														D3DCOLOR_XRGB(255, 255, 255),	// Message
+														D3DCOLOR_XRGB(192, 192, 192),	// Echo
+														D3DCOLOR_XRGB(255, 255, 128),	// Error
+														D3DCOLOR_XRGB(255, 164, 255),	// Warning
+														D3DCOLOR_XRGB(115, 169, 255),	// Info
+														D3DCOLOR_ARGB(90, 255, 255, 255)// Debug
+													};
+
+
+/*----------------------------------------------------------*\
+| Entry point
+\*----------------------------------------------------------*/
+
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pszCmdLine, int nCmdShow)
+{
+	CHitman2DGame game;
+
+	game.Run(GetCommandLine(), nCmdShow);
+
+	return 0;
+}
+
+/*----------------------------------------------------------*\
+| CHitman2DGame implementation
+\*----------------------------------------------------------*/
+
+CHitman2DGame::CHitman2DGame(void): CThunderGame(IDI_HITMAN2D),
+									m_bConfigureExternal(false),
+									m_bConfigure(false),
+									m_fMusicVolume(0.0f),
+									m_fEffectsVolume(0.0f),
+									m_fSpeechVolume(0.0f),
+									m_pConsole(NULL),
+									m_pLoading(NULL),
+									m_qwLastBench(0),
+									m_bProgressMapInstance(false),
+									m_bLastProgressAborted(false)
+{
+#ifdef _DEBUG
+
+	// Enable run-time memory check
+
+    _CrtSetDbgFlag( _CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF );
+
+	// Enable custom allocation hook for leak tracking
+
+	_CrtSetAllocHook(CHitman2DGame::DebugAllocHook);
+
+#endif
+
+	// Clear control mappings
+
+	ZeroMemory(m_nControls, sizeof(m_nControls));
+}
+
+CHitman2DGame::~CHitman2DGame(void)
+{
+	Empty();
+}
+
+void CHitman2DGame::ProcessCommandLine(LPCWSTR pszCmdLine)
+{
+	// Check engine version
+
+	if(CThunderEngine::GetVersion() != *(DWORD*)H2D_REQUIRED_ENGINE_VERSION)
+		throw m_Engine.GetErrors().Push(new CHitman2DErrorEngineVersion(__FUNCTIONW__, CThunderEngine::GetVersion(), *(DWORD*)H2D_REQUIRED_ENGINE_VERSION));
+
+	// Parse command line
+
+	CThunderGame::ProcessCommandLine(pszCmdLine);
+
+	// Check for switches
+
+	bool bProfileSwitch = false;
+
+	for(vector<CThunderString>::iterator pos = m_arCommandArgs.begin();
+		pos != m_arCommandArgs.end();
+		pos++)
+	{
+		if(false == bProfileSwitch && (*pos) == H2D_SZ_CMDSWITCH_PROFILE)
+		{
+			// The next argument must be profile path
+
+			pos++;
+
+			if(pos != m_arCommandArgs.end())
+				SetProfilePath(*pos);
+
+			bProfileSwitch = true;
+		}
+		else if((*pos) == H2D_SZ_CMDSWITCH_CONFIGURE)
+		{
+			m_bConfigure = true;
+			m_bConfigureExternal = true;
+		}
+	}
+}
+
+void CHitman2DGame::DeserializeSettings(const CThunderIniFile& rProfile)
+{
+	//
+	// Read CThunderGame settings
+	//
+
+	CThunderGame::DeserializeSettings(rProfile);
+
+	//
+	// Read audio settings
+	//
+
+	// Read music volume
+
+	m_fMusicVolume = rProfile.GetFloatKeyValue(H2D_SZ_PROFILE_SECTION_AUDIO,
+											   H2D_SZ_PROFILE_KEY_MUSICVOLUME,
+											   1.0f);
+
+	// Read effects volume
+
+	m_fEffectsVolume = rProfile.GetFloatKeyValue(H2D_SZ_PROFILE_SECTION_AUDIO,
+												 H2D_SZ_PROFILE_KEY_EFFECTSVOLUME,
+												 1.0f);
+
+	// Read speech volume
+
+	m_fSpeechVolume = rProfile.GetFloatKeyValue(H2D_SZ_PROFILE_SECTION_AUDIO,
+												H2D_SZ_PROFILE_KEY_SPEECHVOLUME,
+												1.0f);
+
+	//
+	// Read Startup Settings
+	//
+
+	// Read control settings path
+
+	SetControlsProfilePath(rProfile.GetStringKeyValue(H2D_SZ_PROFILE_SECTION_STARTUP,
+													  H2D_SZ_PROFILE_KEY_CONTROLS,
+													  NULL));
+
+	// Read script path
+
+	SetScriptPath(rProfile.GetStringKeyValue(H2D_SZ_PROFILE_SECTION_STARTUP,
+											 H2D_SZ_PROFILE_KEY_SCRIPT,
+											 NULL));
+
+	// Read showconfigure
+
+	if(false == m_bConfigure && rProfile.GetBoolKeyValue(H2D_SZ_PROFILE_SECTION_STARTUP,
+														 H2D_SZ_PROFILE_KEY_SHOWCONFIGURE,
+														 false))
+	{
+		m_bConfigure = true;
+	}
+
+	// Read control settings
+
+	DeserializeControlSettings();
+
+	// Set default theme path if none set
+
+	if(m_strThemePath.IsEmpty())
+		m_strThemePath = L"screens\\default.the";
+}
+
+void CHitman2DGame::SerializeSettings(CThunderIniFile& rProfile)
+{
+	//
+	// Save CThunderGame settings
+	//
+
+	CThunderGame::SerializeSettings(rProfile);
+
+	//
+	// Save audio settings
+	//
+
+	// Save effects volume
+
+	rProfile.SetFloatKeyValue(H2D_SZ_PROFILE_SECTION_AUDIO,
+							  H2D_SZ_PROFILE_KEY_EFFECTSVOLUME,
+							  m_fEffectsVolume);
+
+	// Save speech volume
+
+	rProfile.SetFloatKeyValue(H2D_SZ_PROFILE_SECTION_AUDIO,
+							  H2D_SZ_PROFILE_KEY_SPEECHVOLUME,
+							  m_fSpeechVolume);
+
+	// Save music volume
+
+	rProfile.SetFloatKeyValue(H2D_SZ_PROFILE_SECTION_AUDIO,
+							  H2D_SZ_PROFILE_KEY_MUSICVOLUME,
+							  m_fMusicVolume);
+
+	//
+	// Write Startup Settings
+	//
+
+	// Write control settings path
+
+	rProfile.SetStringKeyValue(H2D_SZ_PROFILE_SECTION_STARTUP,
+							   H2D_SZ_PROFILE_KEY_CONTROLS,
+							   m_strControlsProfilePath);
+
+	// Write script path
+
+	rProfile.SetStringKeyValue(H2D_SZ_PROFILE_SECTION_STARTUP,
+							   H2D_SZ_PROFILE_KEY_SCRIPT,
+							   m_strScriptPath);
+
+	// Write show configure
+
+	rProfile.SetBoolKeyValue(H2D_SZ_PROFILE_SECTION_STARTUP,
+							 H2D_SZ_PROFILE_KEY_SHOWCONFIGURE,
+							 m_bConfigure);
+
+	// Write control settings
+
+	SerializeControlSettings();
+}
+
+void CHitman2DGame::InitializeEngine(void)
+{
+	//
+	// Display configuration dialog if needed
+	//
+
+	if(false == m_bConfigure &&
+	   FALSE == PathFileExists(m_strProfilePath))
+	{
+		// Profile doesn't exist - need to show configuration dialog
+		// to allow user to select first-time run settings
+
+		m_bConfigure = true;
+		m_bConfigureExternal = true;
+	}
+
+	if(true == m_bConfigure)
+	{
+		if(m_pLogFile != NULL) m_pLogFile->EnableDateTime(true);
+
+		Print(L"displaying configuration dialog...", THU_PRINT_INFO);
+
+		if(m_pLogFile != NULL) m_pLogFile->EnableDateTime(false);
+
+		CHitman2DDialogConfigure configureDialog(this);
+
+		switch(configureDialog.Show())
+		{
+		case IDSAVEEXIT:
+			{
+				// Save settings
+
+				CThunderIniFile profile;
+
+				try
+				{
+					SerializeSettings(profile);				
+					profile.Serialize(m_strProfilePath);
+				}
+
+				catch(CThunderError& rError)
+				{
+					// Ignore errors if can't save settings
+
+					UNREFERENCED_PARAMETER(rError);
+				}
+
+				// Exit game
+
+				if(m_pLogFile != NULL) m_pLogFile->EnableDateTime(true);
+
+				Print(L"configuration dialog dismissed, save & exit.", THU_PRINT_INFO);
+
+				if(m_pLogFile != NULL) m_pLogFile->EnableDateTime(false);
+
+				throw CHitman2DErrorConfigureExit(__FUNCTIONW__);
+			}
+			break;
+		case IDCANCEL:
+			{
+				// Exit game
+
+				if(m_pLogFile != NULL) m_pLogFile->EnableDateTime(true);
+
+				Print(L"configuration dialog dismissed, exit", THU_PRINT_INFO);
+
+				if(m_pLogFile != NULL) m_pLogFile->EnableDateTime(false);
+
+				throw CHitman2DErrorConfigureExit(__FUNCTIONW__);
+			}
+			break;
+		}
+
+		if(m_pLogFile != NULL) m_pLogFile->EnableDateTime(true);
+
+		Print(L"configuration dialog dismissed, continue.", THU_PRINT_INFO);
+
+		if(m_pLogFile != NULL) m_pLogFile->EnableDateTime(false);
+	}
+
+	if(m_pLogFile != NULL) m_pLogFile->EnableDateTime(true);
+
+	Print(L"initializing engine using profile settings...", THU_PRINT_INFO);
+
+	if(m_pLogFile != NULL) m_pLogFile->EnableDateTime(false);
+
+	CThunderGame::InitializeEngine();
+
+	if(m_pLogFile != NULL) m_pLogFile->EnableDateTime(true);
+
+	Print(L"engine initialized successfully.", THU_PRINT_INFO);
+
+	if(m_pLogFile != NULL) m_pLogFile->EnableDateTime(false);
+}
+
+void CHitman2DGame::InitializeInstance(void)
+{
+	CThunderGame::InitializeInstance();
+
+	//
+	// Begin data initialization
+	//
+
+	if(m_pLogFile != NULL) m_pLogFile->EnableDateTime(true);
+
+	Print(L"initializing game data...", THU_PRINT_INFO);
+
+	if(m_pLogFile != NULL) m_pLogFile->EnableDateTime(false);
+
+	//
+	// Register variables
+	//
+
+	RegisterVariables();
+
+	Print(L"added variables.", THU_PRINT_INFO);
+
+	//
+	// Register commands
+	//
+
+	RegisterCommands();
+
+	Print(L"registered commands.", THU_PRINT_INFO);
+
+	//
+	// Register Classes
+	//
+
+	RegisterClasses();
+
+	Print(L"registered classes.", THU_PRINT_INFO);
+
+	//
+	// Execute startup script
+	//
+
+	if(m_pLogFile != NULL) m_pLogFile->EnableDateTime(true);
+
+	Print(L"executing startup script...", THU_PRINT_INFO);
+
+	if(m_pLogFile != NULL) m_pLogFile->EnableDateTime(false);
+
+	vector<CThunderVariable> params;
+	params.resize(1);
+	params[0].SetStringValue(m_strScriptPath);
+
+	cmd_execute(m_Engine, params);
+
+	//
+	// End data initialization
+	//
+
+	if(m_pLogFile != NULL) m_pLogFile->EnableDateTime(true);
+
+	Print(L"game data initialized successfully.", THU_PRINT_INFO);
+
+	if(m_pLogFile != NULL) m_pLogFile->EnableDateTime(false);
+}
+
+void CHitman2DGame::RegisterCommands(void)
+{
+	CThunderCommandMap& rCommands = m_Engine.GetCommands();
+
+	rCommands.Register(L"openconsole", cmd_openconsole);
+	rCommands.Register(L"print", cmd_print);
+	rCommands.Register(L"clear", cmd_clear);
+	rCommands.Register(L"cls", cmd_clear);
+	rCommands.Register(L"execute", cmd_execute);
+	rCommands.Register(L"shell", cmd_shell);
+	rCommands.Register(L"vartype", cmd_vartype);
+	rCommands.Register(L"mapvar", cmd_mapvar);
+	rCommands.Register(L"echo", cmd_echo);
+	rCommands.Register(L"dir", cmd_dir);
+	rCommands.Register(L"curdir", cmd_curdir);
+	rCommands.Register(L"exit", cmd_exit);
+	rCommands.Register(L"help", cmd_help);
+	rCommands.Register(L"load", cmd_load);
+	rCommands.Register(L"unload", cmd_unload);
+	rCommands.Register(L"reload", cmd_reload);
+	rCommands.Register(L"makeregion", cmd_makeregion);
+	rCommands.Register(L"regiontotexture", cmd_regiontotexture);
+	rCommands.Register(L"verifyunicode", cmd_verifyunicode);
+	rCommands.Register(L"showcustomcursor", cmd_customcursor);
+	rCommands.Register(L"loadcustomcursor", cmd_loadcustomcursor);
+	rCommands.Register(L"showcursor", cmd_showcursor);
+	rCommands.Register(L"showscreen", cmd_showscreen);
+	rCommands.Register(L"loadscreen", cmd_loadscreen);
+	rCommands.Register(L"closescreen", cmd_closescreen);
+	rCommands.Register(L"showfps", cmd_showfps);
+	rCommands.Register(L"alignfps", cmd_alignfps);
+	rCommands.Register(L"showstart", cmd_showstart);
+	rCommands.Register(L"minimize", cmd_minimize);
+	rCommands.Register(L"pausegame", cmd_pausegame);
+	rCommands.Register(L"screenshot", cmd_screenshot);
+	rCommands.Register(L"fillmode", cmd_fillmode);
+	rCommands.Register(L"mastervolume", cmd_mastervolume);
+	rCommands.Register(L"mastermute", cmd_mastermute);
+	rCommands.Register(L"musicvolume", cmd_musicvolume);
+	rCommands.Register(L"effectsvolume", cmd_effectsvolume);
+	rCommands.Register(L"speechvolume", cmd_speechvolume);
+	rCommands.Register(L"playsound", cmd_playsound);
+	rCommands.Register(L"playmusic", cmd_playmusic);
+	rCommands.Register(L"playvideo", cmd_playvideo);
+	rCommands.Register(L"stopsound", cmd_stopsound);
+	rCommands.Register(L"stopmusic", cmd_stopmusic);
+	rCommands.Register(L"stopvideo", cmd_stopvideo);
+	rCommands.Register(L"status", cmd_status);
+	rCommands.Register(L"list", cmd_list);	
+	rCommands.Register(L"about", cmd_about);
+	rCommands.Register(L"pony", cmd_pony);
+	rCommands.Register(L"settings", cmd_settings);
+	rCommands.Register(L"configure", cmd_configure);
+	rCommands.Register(L"logmode", cmd_logmode);
+	rCommands.Register(L"wait", cmd_wait);
+	rCommands.Register(L"break", cmd_break);	
+	rCommands.Register(L"crash", cmd_crash);
+	rCommands.Register(L"benchmark", cmd_benchmark);
+	rCommands.Register(L"lasterror", cmd_lasterror);
+	rCommands.Register(L"errorexit", cmd_errorexit);
+	rCommands.Register(L"test", cmd_test);
+	rCommands.Register(L"engine.option", cmd_engineoption);
+	rCommands.Register(L"timemultiplier", cmd_timemultiplier);
+	rCommands.Register(L"map", cmd_map);
+	rCommands.Register(L"savemap", cmd_savemap);
+	rCommands.Register(L"loadgame", cmd_loadgame);
+	rCommands.Register(L"savegame", cmd_savegame);
+	rCommands.Register(L"quickload", cmd_quickload);
+	rCommands.Register(L"quicksave", cmd_quicksave);
+	rCommands.Register(L"control", cmd_control);
+}
+
+void CHitman2DGame::RegisterVariables(void)
+{
+	CThunderVariableMap& rVariables = m_Engine.GetVariables();
+}
+
+void CHitman2DGame::RegisterClasses(void)
+{
+	// Register screen classes
+
+	CThunderClassMap& rClasses = m_Engine.GetClasses();
+
+	rClasses.Register(L"frame", (PCREATECLASSCALLBACK)CHitman2DScreenFrame::CreateInstance);
+	rClasses.Register(L"image", (PCREATECLASSCALLBACK)CHitman2DScreenImage::CreateInstance);
+	rClasses.Register(L"label", (PCREATECLASSCALLBACK)CHitman2DScreenLabel::CreateInstance);
+	rClasses.Register(L"button", (PCREATECLASSCALLBACK)CHitman2DScreenButton::CreateInstance);
+	rClasses.Register(L"buttonex", (PCREATECLASSCALLBACK)CHitman2DScreenButtonEx::CreateInstance);
+	rClasses.Register(L"progressbar", (PCREATECLASSCALLBACK)CHitman2DScreenProgressBar::CreateInstance);
+	rClasses.Register(L"scrollbar", (PCREATECLASSCALLBACK)CHitman2DScreenScrollBar::CreateInstance);
+	rClasses.Register(L"listbox", (PCREATECLASSCALLBACK)CHitman2DScreenListBox::CreateInstance);
+	rClasses.Register(L"overlapped", (PCREATECLASSCALLBACK)CHitman2DScreenOverlapped::CreateInstance);
+	rClasses.Register(L"overlapped::fps", (PCREATECLASSCALLBACK)CHitman2DScreenFps::CreateInstance);
+	rClasses.Register(L"overlapped::console", (PCREATECLASSCALLBACK)CHitman2DScreenConsole::CreateInstance);
+	rClasses.Register(L"overlapped::credits", (PCREATECLASSCALLBACK)CHitman2DScreenCredits::CreateInstance);
+	rClasses.Register(L"overlapped::pause", (PCREATECLASSCALLBACK)CHitman2DScreenPause::CreateInstance);
+	rClasses.Register(L"overlapped::start", (PCREATECLASSCALLBACK)CHitman2DScreenStart::CreateInstance);
+	rClasses.Register(L"overlapped::progress", (PCREATECLASSCALLBACK)CHitman2DScreenProgress::CreateInstance);
+	rClasses.Register(L"overlapped::exit", (PCREATECLASSCALLBACK)CHitman2DScreenExit::CreateInstance);
+
+	// Register map classes
+
+	rClasses.Register(L"test", (PCREATECLASSCALLBACK)CHitman2DMap::CreateInstance);
+
+	// Register actor classes
+
+	rClasses.Register(L"player", (PCREATECLASSCALLBACK)CHitman2DActorPlayer::CreateInstance);
+	rClasses.Register(L"prop", (PCREATECLASSCALLBACK)CHitman2DActorProp::CreateInstance);
+}
+
+void CHitman2DGame::DestroyInstance(void)
+{
+	if(m_pLogFile != NULL) m_pLogFile->EnableDateTime(true);
+
+	Print(L"destroying game data...", THU_PRINT_INFO);
+
+	Print(L"game data destroyed successfully.", THU_PRINT_INFO);
+
+	if(m_pLogFile != NULL) m_pLogFile->EnableDateTime(false);
+}
+
+void CHitman2DGame::OnError(const CThunderError& rError)
+{
+	UNREFERENCED_PARAMETER(rError);
+
+	// Handle recoverable errors
+
+	if(typeid(rError) == typeid(CHitman2DErrorConfigureExit))
+	{
+		// Configuration dialog closed, must exit - ignore error
+
+		return;
+	}
+
+	// If running full screen, hide game window and display error on top of desktop
+
+	bool bOnTopOfWindow = true;
+
+	if(true == m_bFullScreen && m_Engine.GetGameWindow())
+	{
+		ShowWindow(m_Engine.GetGameWindow(), SW_HIDE);
+
+		bOnTopOfWindow = false;
+	}
+
+	// Show error message box for every error on the error stack
+
+	if(m_pLogFile != NULL) m_pLogFile->EnableDateTime(true);
+
+	CHitman2DDialogError dialogError;
+
+	if(m_Engine.GetErrorsConst().GetCount() > 0)
+	{
+		bool bContinue = true;
+
+		while(m_Engine.GetErrorsConst().GetCount() > 0)
+		{
+			// Log this error (if not logging, fail to log silently)
+
+			Print(m_Engine.GetErrorsConst().GetLastError()->GetDescription(), THU_PRINT_ERROR);
+
+			// Display error dialog
+
+			if(true == bContinue)
+			{
+				dialogError.Show(bOnTopOfWindow ? m_Engine.GetGameWindow() : NULL,
+								 m_Engine.GetErrorsConst().GetLastError()->GetDescription());
+
+				bContinue = !dialogError.GetNotAgain();
+			}
+
+			// Remove it from the stack
+
+			m_Engine.GetErrors().Pop();
+		}
+	}
+	else
+	{
+		// Log this error (if not logging, fail to log silently)
+
+		Print(rError.GetDescription(), THU_PRINT_ERROR);
+
+		// Display error dialog
+
+		dialogError.Show(bOnTopOfWindow ? m_Engine.GetGameWindow() : NULL,
+						 rError.GetDescription());
+	}
+
+	if(m_pLogFile != NULL)
+		m_pLogFile->EnableDateTime(false);
+
+	Exit();
+}
+
+float CHitman2DGame::GetMusicVolume(void) const
+{
+	return m_fMusicVolume;
+}
+
+void CHitman2DGame::SetMusicVolume(float fMusicVolume)
+{
+	m_fMusicVolume = fMusicVolume;
+
+	// Set volume of all playing music resources
+
+	for(map<CThunderString, CThunderMusic*>::iterator pos = m_Engine.GetMusic().GetFirstPos();
+		pos != m_Engine.GetMusic().GetLastPos();
+		pos++)
+	{
+		if(pos->second->IsFlagSet(THU_MUSIC_PLAYING) == true)
+			pos->second->SetVolume(m_fMusicVolume);
+	}
+}
+
+float CHitman2DGame::GetEffectsVolume(void) const
+{
+	return m_fEffectsVolume;
+}
+
+void CHitman2DGame::SetEffectsVolume(float fEffectsVolume)
+{
+	m_fEffectsVolume = fEffectsVolume;
+
+	// Set volume of all playing sound instances without H2D_SOUNDINST_SPEECH flag
+
+	for(list<CThunderSoundInstance*>::iterator pos = m_Engine.GetSoundInstances().GetFirstPos();
+		pos != m_Engine.GetSoundInstances().GetLastPos();
+		pos++)
+	{
+		if((*pos)->IsFlagSet(THU_SOUNDINST_PLAYING) == true &&
+		   (*pos)->IsFlagSet(H2D_SOUNDINST_SPEECH) == false)
+		{
+			(*pos)->SetVolume(m_fEffectsVolume);
+		}
+	}
+}
+
+float CHitman2DGame::GetSpeechVolume(void) const
+{
+	return m_fSpeechVolume;
+}
+
+void CHitman2DGame::SetSpeechVolume(float fSpeechVolume)
+{
+	m_fSpeechVolume = fSpeechVolume;
+
+	// Set volume of all playing sound instances with H2D_SOUNDINST_SPEECH flag
+
+	for(list<CThunderSoundInstance*>::iterator pos = m_Engine.GetSoundInstances().GetFirstPos();
+		pos != m_Engine.GetSoundInstances().GetLastPos();
+		pos++)
+	{
+		if((*pos)->IsFlagSet(THU_SOUNDINST_PLAYING) == true &&
+		   (*pos)->IsFlagSet(H2D_SOUNDINST_SPEECH) == true)
+		{
+			(*pos)->SetVolume(m_fSpeechVolume);
+		}
+	}
+}
+
+const CThunderString& CHitman2DGame::GetControlsProfilePath(void) const
+{
+	return m_strControlsProfilePath;
+}
+
+void CHitman2DGame::SetControlsProfilePath(LPCWSTR pszControlsPath)
+{
+	if(pszControlsPath != NULL)
+		m_strControlsProfilePath = pszControlsPath;
+	else
+		m_strControlsProfilePath = L".\\controls.ini";
+}
+
+bool CHitman2DGame::GetShowConfigure(void) const
+{
+	return m_bConfigure;
+}
+
+void CHitman2DGame::SetShowConfigure(bool bShowConfigure)
+{
+	m_bConfigure = bShowConfigure;
+}
+
+bool CHitman2DGame::GetConfigureExternal(void) const
+{
+	return m_bConfigureExternal;
+}
+
+void CHitman2DGame::DeserializeControlSettings(void)
+{
+	//
+	// Read Control Settings
+	//
+
+	CThunderIniFile controlSettings(&m_Engine.GetErrors());
+
+	try
+	{
+		controlSettings.Deserialize(m_strControlsProfilePath);
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		// Load default controls
+
+		for(int n = 0; n < H2D_CONTROL_COUNT; n++)
+		{
+			m_nControls[n] = H2D_N_CONTROL_DEFAULTS[n];
+		}
+
+		return;
+	}
+
+	// Load control names
+
+	map<CThunderString, int> m_mapKeys;
+
+	for(int n = 0; n < sizeof(H2D_SZ_VKMAP) / sizeof(LPCWSTR); n++)
+	{
+		m_mapKeys[H2D_SZ_VKMAP[n]] = n;
+	}
+
+	// Load controls
+
+	WCHAR szSection[32] = {0};
+	LPCWSTR psz = NULL;
+
+	for(int n = 0; n < H2D_CONTROL_COUNT; n++)
+	{
+		psz = wcschr(H2D_SZ_CONTROLS[n], L'.');
+
+		wcsncpy_s(szSection, 32, H2D_SZ_CONTROLS[n], psz - H2D_SZ_CONTROLS[n]);
+
+		m_nControls[n] = m_mapKeys[controlSettings.GetStringKeyValue(szSection, psz + 1, H2D_SZ_VKMAP[0])];
+	}
+}
+
+void CHitman2DGame::SerializeControlSettings(void)
+{
+	//
+	// Write Control Settings
+	//
+
+	CThunderIniFile controlSettings;
+
+	WCHAR szSection[32] = {0};
+	LPCWSTR psz = NULL;
+
+	for(int n = 0; n < H2D_CONTROL_COUNT; n++)
+	{
+		psz = wcschr(H2D_SZ_CONTROLS[n], L'.');
+
+		wcsncpy_s(szSection, 32, H2D_SZ_CONTROLS[n], psz - H2D_SZ_CONTROLS[n]);
+
+		if(m_nControls[n]) controlSettings.SetStringKeyValue(szSection, psz + 1, H2D_SZ_VKMAP[m_nControls[n]]);
+	}
+
+	controlSettings.Serialize(m_strControlsProfilePath);
+}
+
+int CHitman2DGame::GetControl(H2D_CONTROLS nControl) const
+{
+	return m_nControls[nControl];
+}
+
+void CHitman2DGame::SetControl(H2D_CONTROLS nControl, int nKey)
+{
+	if(nControl < 0 || nControl >= H2D_CONTROL_COUNT) return;
+
+	m_nControls[nControl] = nKey;
+}
+
+const CThunderString& CHitman2DGame::GetScriptPath(void) const
+{
+	return m_strScriptPath;
+}
+
+void CHitman2DGame::SetScriptPath(LPCWSTR pszScriptPath)
+{
+	if(pszScriptPath != NULL)
+	{
+		m_strScriptPath = pszScriptPath;
+	}
+	else
+	{
+		m_strScriptPath = L".\\scripts\\startup.thc";
+	}
+}
+
+CHitman2DScreenConsole* CHitman2DGame::GetConsole(void)
+{
+	return m_pConsole;
+}
+
+void CHitman2DGame::SetConsole(CHitman2DScreenConsole* pConsole)
+{
+	m_pConsole = pConsole;
+}
+
+int CHitman2DGame::DebugAllocHook(int nAllocType,
+								  void* pUserData,
+								  size_t nAllocSize,
+								  int nBlockType,
+								  long nRequestNumber,
+								  const unsigned char* pszFileName,
+								  int nLineNumber)
+{
+	// Insert code here to check for a specific allocation
+
+	//_ASSERT(nRequestNumber != 14100);
+
+	return TRUE;
+}
+
+void CHitman2DGame::OnKeyDown(int nKeyCode)
+{
+	try
+	{
+		// If there is a currently playing video, stop it with escape, enter or space
+
+		if(m_Engine.GetCurrentVideo() != NULL &&
+		  (VK_ESCAPE == nKeyCode || VK_RETURN == nKeyCode || VK_SPACE == nKeyCode))
+		{
+			m_Engine.GetCurrentVideo()->Stop();
+		}
+
+		// Check variable controls
+
+		if(nKeyCode == m_nControls[H2D_CONTROL_DEBUG_CONSOLE])
+		{
+			if(m_pConsole != NULL) m_pConsole->Toggle();
+		}
+		else if(nKeyCode == m_nControls[H2D_CONTROL_DEBUG_EXIT])
+		{
+			Exit();
+			return;
+		}
+		else if(nKeyCode == m_nControls[H2D_CONTROL_GAME_PAUSE])
+		{
+			if(m_Engine.GetCurrentMapConst() != NULL)
+				m_Engine.GetCommands().ExecuteStatement(L"showscreen", L"\"pause\", 1006");
+		}
+		else if(nKeyCode == m_nControls[H2D_CONTROL_GAME_SCREENSHOT])
+		{
+			m_Engine.GetCommands().ExecuteStatement(L"screenshot");
+		}
+		else if(nKeyCode == m_nControls[H2D_CONTROL_DEBUG_FILLMODE])
+		{
+			if(m_Engine.GetScreens().GetFocusScreen() == NULL ||
+			   m_Engine.GetScreens().GetFocusScreen()->IsFlagSet(THU_SCREEN_DISABLED) == true)	
+			{
+				// Fill mode no longer exists in the engine
+				// TODO: reimp in client
+			}
+		}
+		else if(nKeyCode == m_nControls[H2D_CONTROL_DEBUG_TEST])
+		{
+			m_Engine.GetCommands().ExecuteStatement(L"test");
+		}
+		else if(nKeyCode == m_nControls[H2D_CONTROL_EDITOR_CAMERAUP])
+		{
+			if(m_Engine.GetScreens().GetFocusScreen() == NULL ||
+			   m_Engine.GetScreens().GetFocusScreen()->IsFlagSet(THU_SCREEN_DISABLED) == true)
+			{
+				if(m_Engine.GetCurrentMapConst() != NULL)
+				{
+					m_Engine.GetCurrentMap()->SetCameraPos(m_Engine.GetCurrentMap()->GetCameraPos().tx,
+														   m_Engine.GetCurrentMap()->GetCameraPos().ty - 0.5f);
+				}
+			}
+		}
+		else if(nKeyCode == m_nControls[H2D_CONTROL_EDITOR_CAMERADOWN])
+		{
+			if(m_Engine.GetScreens().GetFocusScreen() == NULL ||
+			   m_Engine.GetScreens().GetFocusScreen()->IsFlagSet(THU_SCREEN_DISABLED) == true)
+			{
+				if(m_Engine.GetCurrentMapConst() != NULL)
+				{
+					m_Engine.GetCurrentMap()->SetCameraPos(m_Engine.GetCurrentMap()->GetCameraPos().tx,
+														   m_Engine.GetCurrentMap()->GetCameraPos().ty + 0.5f);
+				}
+			}
+		}
+		else if(nKeyCode == m_nControls[H2D_CONTROL_EDITOR_CAMERALEFT])
+		{
+			if(m_Engine.GetScreens().GetFocusScreen() == NULL ||
+			   m_Engine.GetScreens().GetFocusScreen()->IsFlagSet(THU_SCREEN_DISABLED) == true)
+			{
+				if(m_Engine.GetCurrentMapConst() != NULL)
+				{
+					m_Engine.GetCurrentMap()->SetCameraPos(m_Engine.GetCurrentMap()->GetCameraPos().tx - 0.5f,
+														   m_Engine.GetCurrentMap()->GetCameraPos().ty);
+				}
+			}
+		}
+		else if(nKeyCode == m_nControls[H2D_CONTROL_EDITOR_CAMERARIGHT])
+		{
+			if(m_Engine.GetScreens().GetFocusScreen() == NULL ||
+			   m_Engine.GetScreens().GetFocusScreen()->IsFlagSet(THU_SCREEN_DISABLED) == true)
+			{
+				if(m_Engine.GetCurrentMapConst() != NULL)
+				{
+					m_Engine.GetCurrentMap()->SetCameraPos(m_Engine.GetCurrentMap()->GetCameraPos().tx + 0.5f,
+														   m_Engine.GetCurrentMap()->GetCameraPos().ty);
+				}
+			}
+		}
+		else if(nKeyCode == 'H')
+		{
+			if(m_Engine.GetScreens().GetFocusScreen() == NULL ||
+			   m_Engine.GetScreens().GetFocusScreen()->IsFlagSet(THU_SCREEN_DISABLED) == true)
+			{
+				CHitman2DMap* pMap = dynamic_cast<CHitman2DMap*>(m_Engine.GetCurrentMap());
+				if(pMap != NULL) pMap->SetShadowmapFactor(pMap->GetShadowmapFactor() + 0.05f);
+			}
+		}
+		else if(nKeyCode == 'J')
+		{
+			if(m_Engine.GetScreens().GetFocusScreen() == NULL ||
+			   m_Engine.GetScreens().GetFocusScreen()->IsFlagSet(THU_SCREEN_DISABLED) == true)
+			{
+				CHitman2DMap* pMap = dynamic_cast<CHitman2DMap*>(m_Engine.GetCurrentMap());
+				if(pMap != NULL) pMap->SetShadowmapFactor(pMap->GetShadowmapFactor() - 0.05f);
+			}
+		}
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		PrintLastError(m_Engine);
+	}
+}
+
+DWORD CHitman2DGame::GetMemoryFootprint(void) const
+{
+	return CThunderGame::GetMemoryFootprint() - sizeof(CThunderGame) + sizeof(CHitman2DGame) +
+		   (DWORD)m_strScriptPath.GetLengthBytes();
+}
+
+void CHitman2DGame::Print(LPCWSTR pszString, THU_PRINT_TYPES nPrintType, bool bLine)
+{
+	CThunderGame::Print(pszString, nPrintType, bLine);
+
+	if(m_pConsole != NULL) m_pConsole->Print(pszString, nPrintType, bLine);
+}
+
+void CHitman2DGame::OnSessionPause(bool bPause)
+{
+	if(true == bPause)
+	{
+		// Pause all playing sounds
+
+		for(list<CThunderSoundInstance*>::iterator pos = m_Engine.GetSoundInstances().GetFirstPos();
+			pos != m_Engine.GetSoundInstances().GetLastPos();
+			pos++)
+		{
+			if((*pos)->IsFlagSet(THU_SOUNDINST_PLAYING) == true)
+			{
+				(*pos)->SetFlag(H2D_SOUNDINST_SUSPENDED);
+				(*pos)->Pause(true);				
+			}
+		}
+
+		// Pause all playing music
+
+		for(map<CThunderString, CThunderMusic*>::iterator pos = m_Engine.GetMusic().GetFirstPos();
+			pos != m_Engine.GetMusic().GetLastPos();
+			pos++)
+		{
+			if(pos->second->IsFlagSet(THU_MUSIC_PLAYING) == true)
+			{
+				pos->second->SetFlag(H2D_MUSIC_SUSPENDED);
+				pos->second->Pause(true);
+			}
+		}
+
+		// Pause currently playing video if any
+
+		if(m_Engine.GetCurrentVideo() != NULL &&
+		   m_Engine.GetCurrentVideo()->IsFlagSet(THU_VIDEO_PLAYING) == true)
+		{
+			m_Engine.GetCurrentVideo()->SetFlag(H2D_VIDEO_SUSPENDED);
+			m_Engine.GetCurrentVideo()->Pause(true);
+		}
+	}
+	else
+	{
+		// Resume suspended sounds
+
+		for(list<CThunderSoundInstance*>::iterator pos = m_Engine.GetSoundInstances().GetFirstPos();
+			pos != m_Engine.GetSoundInstances().GetLastPos();
+			pos++)
+		{
+			if((*pos)->IsFlagSet(H2D_SOUNDINST_SUSPENDED) == true)
+			{
+				(*pos)->ClearFlag(H2D_SOUNDINST_SUSPENDED);
+				(*pos)->Pause(false);
+			}
+		}
+
+		// Resume suspended music
+
+		for(map<CThunderString, CThunderMusic*>::iterator pos = m_Engine.GetMusic().GetFirstPos();
+			pos != m_Engine.GetMusic().GetLastPos();
+			pos++)
+		{
+			if(pos->second->IsFlagSet(H2D_MUSIC_SUSPENDED) == true)
+			{
+				pos->second->ClearFlag(H2D_MUSIC_SUSPENDED);
+				pos->second->Pause(false);
+			}
+		}
+
+		// Resume suspended video if any
+
+		if(m_Engine.GetCurrentVideo() != NULL &&
+		   m_Engine.GetCurrentVideo()->IsFlagSet(H2D_VIDEO_SUSPENDED) == true)
+		{
+			m_Engine.GetCurrentVideo()->ClearFlag(H2D_VIDEO_SUSPENDED);
+			m_Engine.GetCurrentVideo()->Pause(false);
+		}
+	}
+}
+
+void CHitman2DGame::OnLogStart(void)
+{
+	// Set some properties
+
+	if(THU_LOG_HTML == m_nLogMode)
+	{
+		CThunderLogFileHTML* pEx = dynamic_cast<CThunderLogFileHTML*>(m_pLogFile);
+		
+		if(NULL == pEx)
+			throw m_Engine.GetErrors().Push(new CThunderErrorInvalidPtr(__FUNCTIONW__, L"m_pLogFile"));
+
+		WCHAR szLogDir[MAX_PATH] = {0};
+		wcscpy_s(szLogDir, MAX_PATH, m_strLogFilePath);
+		PathRemoveFileSpec(szLogDir);
+
+		if(PathIsRelative(szLogDir) == TRUE)
+		{
+			LPCWSTR pszDirs[] = { m_Engine.GetBaseDirectory(), NULL };
+			PathResolve(szLogDir, pszDirs, PRF_FIRSTDIRDEF);
+		}		
+
+		WCHAR szImagePath[MAX_PATH] = {0};
+		wcscpy_s(szImagePath, MAX_PATH, m_Engine.GetBaseDirectory());
+		PathAppend(szImagePath, L"\\textures\\screens\\log.jpg");
+
+		WCHAR szRelPath[MAX_PATH] = {0};
+		PathRelativePathTo(szRelPath, szLogDir, FILE_ATTRIBUTE_DIRECTORY, szImagePath, FILE_ATTRIBUTE_NORMAL);
+
+		pEx->SetBackground(szRelPath);
+
+		pEx->SetBackColor(D3DCOLOR_XRGB(149, 0, 0));
+		pEx->SetBackgroundCenter(true);
+		pEx->SetBackgroundFixed(true);
+		pEx->SetBackgroundRepeat(false);
+
+		for(int n = 0; n < THU_PRINT_CLEAR; n++)
+			pEx->SetTextColor(static_cast<THU_PRINT_TYPES>(n), H2D_LOG_COLORS[n]);
+	}
+}
+
+void CHitman2DGame::OnProgress(THU_PROGRESS_TYPES nType,
+							   THU_PROGRESS_SUBTYPES nSubType,
+							   int nProgress,
+							   int nProgressMax)
+{
+	// Do not display progress for loading or saving map instance
+
+	if(THU_PROGRESS_MAPINSTANCE == nSubType)
+		m_bProgressMapInstance = !(nProgress == nProgressMax);	
+
+	if(true == m_bProgressMapInstance)
+		return;
+
+	// Clear last progress aborted flag if starting new sequence
+
+	if(THU_PROGRESS_SESSION == nType || THU_PROGRESS_MAP == nType)
+		m_bLastProgressAborted = false;
+
+	// Display progress dialog if not displayed
+
+	if(NULL == m_pLoading && false == m_bLastProgressAborted)
+	{
+		vector<CThunderVariable> params;
+
+		CThunderVariable param;
+		param.SetStringValue(L"progress");
+
+		params.push_back(param);
+
+		m_pLoading = reinterpret_cast<CHitman2DScreenProgress*>(cmd_showscreen(m_Engine, params));
+	}
+
+	// Notify
+
+	if(NULL == m_pLoading) return;
+	
+	m_pLoading->SetProgress(nType, nSubType, nProgress, nProgressMax);
+
+	if(m_pLoading->IsAborted())
+	{
+		m_bLastProgressAborted = true;
+		m_pLoading = NULL;
+
+		throw m_Engine.GetErrors().Push(new CThunderErrorUser(__FUNCTIONW__));
+	}								
+}
+
+void CHitman2DGame::OnThemeChange(const CThunderTheme& rNewTeme)
+{
+	// TODO
+}
+
+void CHitman2DGame::Empty(void)
+{
+	CThunderGame::Empty();
+}
+
+int CHitman2DGame::cmd_help(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	CThunderStringTable* pHelpStrings = rEngine.GetStringTables().Load(L".\\strings\\console.tht");
+
+	if(NULL == pHelpStrings)
+	{
+		PrintLastError(rEngine);
+
+		return FALSE;
+	}
+
+	if(rParams.empty() == true)
+	{
+		// Print main topic
+
+		rEngine.Print(pHelpStrings->GetString(L"main"));
+	}
+	else
+	{
+		if(rParams[0].GetVarType() != THU_VAR_ENUM)
+		{
+			rEngine.Print(L"invalid param type (1): expected enum.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		rEngine.Print(pHelpStrings->GetString(rParams[0].GetStringValue()));
+	}
+		
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_exit(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rEngine.GetGameInstance() != NULL)		
+		rEngine.GetGameInstance()->Exit();
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_wait(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		rEngine.Print(L"invalid syntax: int waittime expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_INT && rParams[0].GetVarType() != THU_VAR_DWORD)
+	{
+		rEngine.Print(L"invalid param type (1): expected int or dword.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	Sleep(DWORD(rParams[0].GetDwordValue()));
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_clear(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	rEngine.Print(NULL, THU_PRINT_CLEAR);
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_status(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		rEngine.Print(L"invalid syntax: expected enum { engine, map, memory, d3d } item.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_ENUM)
+	{
+		rEngine.Print(L"invalid param type (1): expected enum", THU_PRINT_ERROR);
+		return FALSE;
+	}
+	
+	CThunderString str;
+	int n;
+
+	if(wcscmp(rParams[0].GetStringValue(), L"engine") == 0)
+	{
+		// Print general engine info
+
+		str.Format( L"\nBEGIN ENGINE STATUS\n\n"
+					L"   run time          = %f seconds\n"
+					L"   session started   = %s\n"
+					L"   session paused    = %s\n"				   
+					L"   session time      = %f seconds\n"
+					L"   last frame time   = %f seconds (%.2f ms)\n"
+					L"   frame rate        = %d frames per second\n",
+
+			rEngine.GetRunTime(),
+			rEngine.IsSessionStarted() ? L"true" : L"false",
+			rEngine.IsSessionPaused() ? L"true" : L"false",
+			rEngine.GetTime(),
+			rEngine.GetFrameTime(), rEngine.GetFrameTime() * 1000.0f,
+			rEngine.GetGraphics().GetFPS());
+
+		rEngine.Print(str, THU_PRINT_INFO);
+
+		// Print engine options
+
+		for(n = 0; n < THU_OPTION_COUNT; n++)
+		{
+			switch(n)
+			{
+			case THU_OPTION_TILESIZE:
+			case THU_OPTION_NETPORT:
+			case THU_OPTION_STREAMCACHEDURATION:
+			case THU_OPTION_RESOURCECACHEDURATION:
+			case THU_OPTION_STREAMCACHEFREQUENCY:
+			case THU_OPTION_RESOURCECACHEFREQUENCY:
+				str.Format(L"   %-19s = %d", H2D_SZ_ENGINE_OPTIONS[n], rEngine.GetOption((THU_OPTIONS)n));
+				break;
+			default:
+				str.Format(L"   %-19s = %s", H2D_SZ_ENGINE_OPTIONS[n], rEngine.GetOption((THU_OPTIONS)n) ? L"true" : L"false");
+				break;
+			}
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		// Print resource counts
+
+		str.Format(	L"\n   timers            = %d\n"
+					L"   commands          = %d\n"
+					L"   variables         = %d\n"
+					L"   sounds playing    = %d\n"
+					L"   top level screens = %d\n"
+					L"\nEND ENGINE STATUS",
+
+					rEngine.GetTimers().GetCount(),
+					rEngine.GetCommandsConst().GetCount(),
+					rEngine.GetVariablesConst().GetCount(),
+					rEngine.GetSoundInstances().GetCount(),
+					rEngine.GetScreensConst().GetCount());
+
+		rEngine.Print(str, THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"map") == 0)
+	{
+		CThunderMap* pMap = rEngine.GetCurrentMap();
+
+		if(NULL == pMap)
+		{
+			rEngine.Print(L"no current map.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		LPCWSTR pszUnits[4] = {0};
+
+		float fMap = FormatMemory(pMap->GetMemoryFootprint(), &pszUnits[0]);
+		float fTiles = FormatMemory(pMap->GetWidth() * pMap->GetHeight() * sizeof(CThunderTile), &pszUnits[1]);
+		float fCachedTiles = FormatMemory(pMap->GetCameraTileRange().GetTileCount() * sizeof(CThunderTileCached), &pszUnits[2]);
+		float fActors = FormatMemory(pMap->GetActorsMemoryFootprint(), &pszUnits[3]);
+
+		CThunderString strFlags;
+		PrintFlags(pMap->GetFlags(), H2D_SZ_MAPFLAGS, H2D_DW_MAPFLAGS, sizeof(H2D_DW_MAPFLAGS) / sizeof(DWORD), strFlags, L"                      ", L"\n");
+
+		str.Format(L"\nBEGIN CURRENT MAP STATUS\n\n"
+			L"   name             = \"%s\"\n\n"
+			L"   flags:\n%s\n\n"
+			L"   est. memory used = %.3f %s\n\n"
+			L"   width            = %d\n"
+			L"   height           = %d\n"
+			L"   tiles loaded     = %d (%.3f %s)\n"
+			L"   tiles cached     = %d (%.3f %s)\n\n"
+			L"   actors           = %d (%.3f %s)\n"
+			L"   actors to update = %d\n"
+			L"   player actor     = \"%s\"\n"
+			L"   actors cached    = %d\n\n"
+			L"   camera position  = %.3f, %.3f\n"
+			L"   camera size      = %.3f, %.3f\n\n"
+			L"   variables        = %d\n\n"
+			L"   texturesheets    = %d\n"
+			L"   animations       = %d\n"
+			L"   sounds           = %d\n"
+			L"   music            = %d\n\n"
+			L"END CURRENT MAP STATUS",
+
+			pMap->GetName(),
+			strFlags,
+			fMap, pszUnits[0],
+			pMap->GetWidth(),
+			pMap->GetHeight(),
+			pMap->GetWidth() * pMap->GetHeight(), fTiles, pszUnits[1],
+			pMap->GetCameraTileRange().GetTileCount(), fCachedTiles, pszUnits[2],
+			pMap->GetActorCount(), fActors, pszUnits[3],
+			pMap->GetUpdatableActors().GetCount(),
+			pMap->GetPlayerActorConst() ? pMap->GetPlayerActorConst()->GetName() : L"(null)",
+			pMap->GetVisibleActors().GetCount(),
+			pMap->GetCameraPos().tx, pMap->GetCameraPos().ty,
+			pMap->GetCameraSize().tx, pMap->GetCameraSize().ty,
+			pMap->GetVariables().GetCount(),
+			pMap->GetTextureSheetCount(),
+			pMap->GetAnimationCount(),
+			pMap->GetSoundCount(),
+			pMap->GetMusicCount());
+
+		rEngine.Print(str, THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"memory") == 0)
+	{
+		// Display memory status
+
+		MEMORYSTATUS ms = {0};
+		PROCESS_MEMORY_COUNTERS mc = {0};
+
+		GlobalMemoryStatus(&ms);
+		GetProcessMemoryInfo(GetCurrentProcess(), &mc, sizeof(PROCESS_MEMORY_COUNTERS));
+
+		LPCWSTR pszUnits[25] = { NULL };
+
+		float fTotalPhysical = FormatMemory(ms.dwTotalPhys, &pszUnits[0]);
+		float fFreePhysical = FormatMemory(ms.dwAvailPhys, &pszUnits[1]);
+		float fTotalVirtual = FormatMemory(ms.dwTotalVirtual, &pszUnits[2]);
+		float fFreeVirtual = FormatMemory(ms.dwAvailVirtual, &pszUnits[3]);
+		float fTotalPagefile = FormatMemory(ms.dwTotalPageFile, &pszUnits[4]);
+		float fFreePagefile = FormatMemory(ms.dwAvailPageFile, &pszUnits[5]);
+
+		float fWorkingSet = FormatMemory(mc.WorkingSetSize, &pszUnits[6]);
+		float fPeakWorkingSet = FormatMemory(mc.PeakWorkingSetSize, &pszUnits[7]);
+		float fPagefileUsage = FormatMemory(mc.PagefileUsage, &pszUnits[8]);
+		float fPeakPagefileUsage = FormatMemory(mc.PeakPagefileUsage, &pszUnits[9]);
+
+		DWORD dwEngine = rEngine.GetMemoryFootprint();
+
+		float fGame = FormatMemory(rEngine.GetGameInstance()->GetMemoryFootprint() - dwEngine, &pszUnits[10]);
+		float fEngine = FormatMemory(dwEngine, &pszUnits[11]);		
+		float fScreens = FormatMemory(rEngine.GetScreens().GetMemoryFootprint(), &pszUnits[12]);
+		float fMaps = FormatMemory(rEngine.GetMaps().GetMemoryFootprint(), &pszUnits[13]);
+
+		float fTextures = FormatMemory(rEngine.GetTextures().GetMemoryFootprint() + rEngine.GetResourceCache().GetMemoryFootprint(THU_RESOURCE_TEXTURE), &pszUnits[14]);
+		float fTextureSheets = FormatMemory(rEngine.GetTextureSheets().GetMemoryFootprint() + rEngine.GetResourceCache().GetMemoryFootprint(THU_RESOURCE_TEXTURESHEET), &pszUnits[15]);
+		float fTextureFonts = FormatMemory(rEngine.GetTextureFonts().GetMemoryFootprint() + rEngine.GetResourceCache().GetMemoryFootprint(THU_RESOURCE_TEXTUREFONT), &pszUnits[16]);
+		float fAnimations = FormatMemory(rEngine.GetAnimations().GetMemoryFootprint() + rEngine.GetResourceCache().GetMemoryFootprint(THU_RESOURCE_ANIMATION), &pszUnits[17]);
+		float fSprites = FormatMemory(rEngine.GetSprites().GetMemoryFootprint() + rEngine.GetResourceCache().GetMemoryFootprint(THU_RESOURCE_SPRITE), &pszUnits[18]);
+		float fSounds = FormatMemory(rEngine.GetSounds().GetMemoryFootprint() + rEngine.GetResourceCache().GetMemoryFootprint(THU_RESOURCE_SOUND), &pszUnits[19]);
+		float fMusic = FormatMemory(rEngine.GetMusic().GetMemoryFootprint() + rEngine.GetResourceCache().GetMemoryFootprint(THU_RESOURCE_MUSIC), &pszUnits[20]);
+		float fVideo = FormatMemory(rEngine.GetVideos().GetMemoryFootprint() + rEngine.GetResourceCache().GetMemoryFootprint(THU_RESOURCE_VIDEO), &pszUnits[21]);
+		float fRegionSets = FormatMemory(rEngine.GetRegionSets().GetMemoryFootprint() + rEngine.GetResourceCache().GetMemoryFootprint(THU_RESOURCE_REGIONSET), &pszUnits[22]);
+		float fStrings = FormatMemory(rEngine.GetStringTables().GetMemoryFootprint() + rEngine.GetResourceCache().GetMemoryFootprint(THU_RESOURCE_STRINGTABLE), &pszUnits[23]);
+
+		float fStreams = FormatMemory(rEngine.GetStreamCache().GetMemoryFootprint(), &pszUnits[24]);
+
+		str.Format(	L"\nBEGIN MEMORY STATUS\n\n"
+					L"global memory\n"
+					L"   memory in use          = %d%%\n"
+					L"   total physical memory  = %.3f %s\n"
+					L"   free physical memory   = %.3f %s\n"
+					L"   total virtual memory   = %.3f %s\n"
+					L"   free virtual memory    = %.3f %s\n"
+					L"   total pagefile memory  = %.3f %s\n"
+					L"   free pagefile memory   = %.3f %s\n\n"
+					L"process memory\n"
+					L"   working set size       = %.3f %s\n"
+					L"   peak working set size  = %.3f %s\n"
+					L"   pagefile usage         = %.3f %s\n"
+					L"   peak pagefile usage    = %.3f %s\n\n"
+					L"game memory\n"
+					L"   used by game           = %.3f %s\n"
+					L"   used by engine         = %.3f %s\n"
+					L"   used by screens        = %.3f %s (%d loaded on top level)\n"
+					L"   used by maps           = %.3f %s (%d loaded)\n"
+					L"   used by textures       = %.3f %s (%d loaded) (%d cached)\n"
+					L"   used by texturesheets  = %.3f %s (%d loaded) (%d cached)\n"
+					L"   used by texturefonts   = %.3f %s (%d loaded) (%d cached)\n"
+					L"   used by animations     = %.3f %s (%d loaded) (%d cached)\n"
+					L"   used by sprites        = %.3f %s (%d loaded) (%d cached)\n"
+					L"   used by sounds         = %.3f %s (%d loaded) (%d cached)\n"
+					L"   used by music          = %.3f %s (%d loaded) (%d cached)\n"
+					L"   used by videos         = %.3f %s (%d loaded) (%d cached)\n"
+					L"   used by region sets    = %.3f %s (%d loaded) (%d cached)\n"
+					L"   used by string tables  = %.3f %s (%d loaded) (%d cached)\n"
+					L"   used by stream cache   = %.3f %s (%d streams)\n"
+					L"\nEND MEMORY STATUS",
+
+			int(ms.dwMemoryLoad),
+			fTotalPhysical, pszUnits[0],
+			fFreePhysical, pszUnits[1],
+			fTotalVirtual, pszUnits[2],
+			fFreeVirtual, pszUnits[3],
+			fTotalPagefile, pszUnits[4],
+			fFreePagefile, pszUnits[5],
+			fWorkingSet, pszUnits[6],
+			fPeakWorkingSet, pszUnits[7],
+			fPagefileUsage, pszUnits[8],
+			fPeakPagefileUsage, pszUnits[9],
+			fGame, pszUnits[10],
+			fEngine, pszUnits[11],
+			fScreens, pszUnits[12], rEngine.GetScreens().GetCount(),
+			fMaps, pszUnits[13], rEngine.GetMaps().GetCount(),
+			fTextures, pszUnits[14], rEngine.GetTextures().GetCount(), rEngine.GetResourceCache().GetCount(THU_RESOURCE_TEXTURE),
+			fTextureSheets, pszUnits[15], rEngine.GetTextureSheets().GetCount(), rEngine.GetResourceCache().GetCount(THU_RESOURCE_TEXTURESHEET),
+			fTextureFonts, pszUnits[16], rEngine.GetTextureFonts().GetCount(), rEngine.GetResourceCache().GetCount(THU_RESOURCE_TEXTUREFONT),
+			fAnimations, pszUnits[17], rEngine.GetAnimations().GetCount(), rEngine.GetResourceCache().GetCount(THU_RESOURCE_ANIMATION),
+			fSprites, pszUnits[18], rEngine.GetSprites().GetCount(), rEngine.GetResourceCache().GetCount(THU_RESOURCE_SPRITE),
+			fSounds, pszUnits[19], rEngine.GetSounds().GetCount(), rEngine.GetResourceCache().GetCount(THU_RESOURCE_SOUND),
+			fMusic, pszUnits[20], rEngine.GetMusic().GetCount(), rEngine.GetResourceCache().GetCount(THU_RESOURCE_MUSIC),
+			fVideo, pszUnits[21], rEngine.GetVideos().GetCount(), rEngine.GetResourceCache().GetCount(THU_RESOURCE_VIDEO),
+			fRegionSets, pszUnits[22], rEngine.GetRegionSets().GetCount(), rEngine.GetResourceCache().GetCount(THU_RESOURCE_REGIONSET),
+			fStrings, pszUnits[23], rEngine.GetStringTables().GetCount(), rEngine.GetResourceCache().GetCount(THU_RESOURCE_STRINGTABLE),
+			fStreams, pszUnits[24], rEngine.GetStreamCache().GetCount()
+		);
+
+		rEngine.Print(str, THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"d3d") == 0)
+	{
+		// Display D3D data
+
+		D3DDEVICE_CREATION_PARAMETERS createparams = {0};
+
+		if(FAILED(rEngine.GetGraphics().GetDevice()->GetCreationParameters(&createparams)))
+		{
+			rEngine.Print(L"failed to get device creation parameters.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		D3DADAPTER_IDENTIFIER9 adapterid = {0};
+
+		if(FAILED(rEngine.GetGraphics().GetD3D()->GetAdapterIdentifier(createparams.AdapterOrdinal, 0, &adapterid)))
+		{
+			rEngine.Print(L"failed to get current adapter information.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		const D3DPRESENT_PARAMETERS& presentparams = rEngine.GetGraphics().GetDeviceParams();
+
+		WCHAR szAdapterDesc[512] = {0};
+
+		size_t nAdapterDescSize = sizeof(szAdapterDesc) / sizeof(WCHAR);
+
+		mbstowcs_s(&nAdapterDescSize, szAdapterDesc, adapterid.Description, strlen(adapterid.Description) + 1);
+
+		str.Format(	L"\nBEGIN D3D STATUS\n\n"
+					L"   adapter                    = %s\n"
+					L"   device type                = %s\n\n"
+					L"   windowed                   = %s\n"
+					L"   back buffer size           = %dx%d\n"
+					L"   back buffer format         = %s\n"
+					L"   back buffer count          = %d\n\n"
+					L"   multisample type           = %d\n"
+					L"   multisample quality        = %d\n"
+					L"   swap effect                = %s\n"
+					L"   enable auto depth stencil  = %s\n"
+					L"   auto depth stencil format  = %s\n"
+					L"   full screen refresh rate   = %d Hz\n"
+					L"   presentation interval      = %s\n\n"
+					L"   device creation flags:       ",
+
+			szAdapterDesc,
+			H2D_SZ_DEVICETYPE[createparams.DeviceType - 1],
+			presentparams.Windowed ? L"true" : L"false",
+			presentparams.BackBufferWidth,
+			presentparams.BackBufferHeight,
+			H2D_SZ_DEVICEFORMATS[presentparams.BackBufferFormat - D3DFMT_R8G8B8],
+			presentparams.BackBufferCount,
+			presentparams.MultiSampleType,
+			presentparams.MultiSampleQuality,
+			H2D_SZ_SWAPEFFECT[presentparams.SwapEffect - 1],
+			presentparams.EnableAutoDepthStencil ? L"true" : L"false",
+			presentparams.EnableAutoDepthStencil ? (presentparams.AutoDepthStencilFormat > D3DFMT_D16 ? H2D_SZ_DEVICEFORMATS[presentparams.AutoDepthStencilFormat - D3DFMT_D32F_LOCKABLE] : H2D_SZ_DEVICEFORMATS[presentparams.AutoDepthStencilFormat - D3DFMT_D16_LOCKABLE]) : L"none",
+			presentparams.FullScreen_RefreshRateInHz,
+			presentparams.PresentationInterval == D3DPRESENT_INTERVAL_IMMEDIATE ? L"D3DPRESENT_INTERVAL_IMMEDIATE" : L"D3DPRESENT_INTERVAL_ONE");
+
+		bool bAddedFlag = false;
+
+		if(createparams.BehaviorFlags & D3DCREATE_PUREDEVICE)
+		{
+			str += L"D3DCREATE_PUREDEVICE\n";
+			bAddedFlag = true;
+		}
+
+		if(createparams.BehaviorFlags & D3DCREATE_HARDWARE_VERTEXPROCESSING)
+		{
+			if(bAddedFlag) str += L"                                ";
+			str += L"D3DCREATE_HARDWARE_VERTEXPROCESSING\n";
+			bAddedFlag = true;
+		}
+
+		if(createparams.BehaviorFlags & D3DCREATE_SOFTWARE_VERTEXPROCESSING)
+		{
+			if(bAddedFlag) str += L"                                ";
+			str += L"D3DCREATE_SOFTWARE_VERTEXPROCESSING\n";
+			bAddedFlag = true;
+		}
+
+		if(createparams.BehaviorFlags & D3DCREATE_MIXED_VERTEXPROCESSING)
+		{
+			if(bAddedFlag) str += L"                                ";
+			str += L"D3DCREATE_MIXED_VERTEXPROCESSING\n";
+			bAddedFlag = true;
+		}
+
+		str += L"\nEND D3D STATUS";
+
+		rEngine.Print(str, THU_PRINT_INFO);
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_engineoption(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		rEngine.Print(L"invalid syntax: expected enum engineoptions option, [int|bool value].", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_ENUM)
+	{
+		rEngine.Print(L"invalid param type (1): expected enum engineoptions.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	int nOption = 0;
+
+	for(; nOption < THU_OPTION_COUNT; nOption++)
+	{
+		if(wcscmp(rParams[0].GetEnumValue(), H2D_SZ_ENGINE_OPTIONS[nOption]) == 0)
+			break;
+	}
+
+	if(THU_OPTION_COUNT == nOption)
+	{
+		rEngine.Print(L"invalid param value (1): unknown engine option specified.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams.size() == 2)
+	{
+		// Setting an option
+
+		if(rParams[1].GetVarType() != THU_VAR_INT &&
+		   rParams[1].GetVarType() != THU_VAR_BOOL)
+		{
+			rEngine.Print(L"invalid param type (2): expected int or bool", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		rEngine.SetOption((THU_OPTIONS)nOption, rParams[1].GetIntValue());
+	}
+	else
+	{
+		// Getting an option
+
+		CThunderString str;
+
+		switch(nOption)
+		{
+		case THU_OPTION_TEXTUREPOOL:
+			rEngine.Print(H2D_SZ_TEXPOOL[rEngine.GetOption((THU_OPTIONS)nOption)]);
+			break;
+		case THU_OPTION_TILESIZE:
+		case THU_OPTION_NETPORT:
+		case THU_OPTION_RESOURCECACHEDURATION:
+		case THU_OPTION_STREAMCACHEDURATION:
+		case THU_OPTION_RESOURCECACHEFREQUENCY:
+		case THU_OPTION_STREAMCACHEFREQUENCY:
+			str.Format(L"%d", rEngine.GetOption((THU_OPTIONS)nOption));
+			rEngine.Print(str);
+			break;
+		default:
+			rEngine.Print(rEngine.GetOption((THU_OPTIONS)nOption) ? L"true" : L"false");
+			break;
+		}
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_timemultiplier(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		// If no params specified, print time multiplier
+
+		CThunderString str;
+		CThunderVariable var(THU_VAR_FLOAT);
+
+		var.SetFloatValue(rEngine.GetTimeMultiplier());
+		var.ToString(str);
+
+		rEngine.Print(str);
+	}
+	else
+	{
+		// Validate
+
+		if(rParams[0].GetVarType() != THU_VAR_FLOAT)
+		{
+			rEngine.Print(L"invalid param type (1): float expected.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		// Set time multiplier
+
+		rEngine.SetTimeMultiplier(rParams[0].GetFloatValue());
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_list(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		rEngine.Print(L"invalid syntax: expected enum listitems item.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_ENUM)
+	{
+		rEngine.Print(L"invalid param type (1): enum listitems expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	CThunderString str;
+	int n, nCount;
+
+	if(wcscmp(rParams[0].GetStringValue(), L"cpucaps") == 0)
+	{
+		// CPU flags and vendor
+
+		DWORD dwCPUVendor[4] = {0};
+		DWORD dwCPUFlags = 0;
+
+		__asm
+		{
+			pusha
+
+			xor eax,eax
+
+			cpuid
+
+			mov dwCPUVendor[0], ebx
+			mov dwCPUVendor[4], edx
+			mov dwCPUVendor[8], ecx
+
+			mov eax, 1h
+
+			cpuid
+
+			mov dwCPUFlags, edx
+
+			popa
+		}
+
+		WCHAR szCPUVendor[16] = {0};
+
+		mbstowcs_s(NULL, szCPUVendor, 16, (const char*)dwCPUVendor, 12);
+
+		rEngine.Print(L"\nBEGIN CPU CAPABILITIES", THU_PRINT_INFO);
+
+		str.Format(L"   vendor = \"%s\"\n", szCPUVendor);
+
+		rEngine.Print(str, THU_PRINT_INFO);
+
+		rEngine.Print(L"   flags:", THU_PRINT_INFO, true);
+
+		PrintFlags(dwCPUFlags, H2D_SZ_CPUFLAGS, H2D_DW_CPUFLAGS, sizeof(H2D_DW_CPUFLAGS) / sizeof(DWORD), str, L"         ", L"\n");
+
+		rEngine.Print(str, THU_PRINT_INFO);
+
+		rEngine.Print(L"END CPU CAPABILITIES", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"d3dcaps") == 0)
+	{
+		// D3D capabilities
+
+		rEngine.Print(L"\nBEGIN DIRECT3D CAPABILITIES\n", THU_PRINT_INFO);
+
+		const D3DCAPS9& rCaps = rEngine.GetGraphics().GetDeviceCaps();
+
+		// Output general caps
+
+		str.Empty();
+
+		str.Format(L"   MaxTextureWidth         = %d\n"
+				   L"   MaxTextureHeight        = %d\n"
+				   L"   MaxVolumeExtent         = %d\n"
+				   L"   MaxTextureRepeat        = %d\n"
+				   L"   MaxTextureAspectRatio   = %d\n"
+				   L"   MaxTextureBlendStages   = %d\n"
+				   L"   MaxSimultaneousTextures = %d\n"
+				   L"   MaxPointSize            = %f\n"
+				   L"   MaxPrimitiveCount       = %d\n"
+				   L"   MaxVertexIndex          = %d\n"
+				   L"   MaxStreams              = %d\n"
+				   L"   VertexShaderVersion     = 0x%x\n"
+				   L"   MaxVertexShaderConst    = %d\n"
+				   L"   PixelShaderVersion      = 0x%x\n"
+				   L"   NumSimultaneousRTs      = %d\n\n",
+				   
+				   rCaps.MaxTextureWidth,
+				   rCaps.MaxTextureHeight,
+				   rCaps.MaxVolumeExtent,
+				   rCaps.MaxTextureRepeat,
+				   rCaps.MaxTextureAspectRatio,
+				   rCaps.MaxTextureBlendStages,
+				   rCaps.MaxSimultaneousTextures,
+				   rCaps.MaxPointSize,
+				   rCaps.MaxPrimitiveCount,
+				   rCaps.MaxVertexIndex,
+				   rCaps.MaxStreams,
+				   rCaps.VertexShaderVersion,
+				   rCaps.MaxVertexShaderConst,
+				   rCaps.PixelShaderVersion,
+				   rCaps.NumSimultaneousRTs);
+
+		rEngine.Print(str, THU_PRINT_INFO);
+
+
+		// Output caps 1 flags
+
+		str.Empty();
+		PrintFlags(rCaps.Caps, H2D_SZ_DEVCAPS_1, H2D_DW_DEVCAPS_1, sizeof(H2D_DW_DEVCAPS_1) / sizeof(DWORD), str, L"   ", L"\n");
+		if(str.GetLength()) rEngine.Print(str, THU_PRINT_INFO);
+		rEngine.Print();
+
+		// Output caps 2 flags
+
+		str.Empty();
+		PrintFlags(rCaps.Caps2, H2D_SZ_DEVCAPS_2, H2D_DW_DEVCAPS_2, sizeof(H2D_DW_DEVCAPS_2) / sizeof(DWORD), str, L"   ", L"\n");
+		if(str.GetLength()) rEngine.Print(str, THU_PRINT_INFO);
+		rEngine.Print();
+
+		// Output caps 3 flags
+
+		str.Empty();
+		PrintFlags(rCaps.Caps3, H2D_SZ_DEVCAPS_3, H2D_DW_DEVCAPS_3, sizeof(H2D_DW_DEVCAPS_3) / sizeof(DWORD), str, L"   ", L"\n");
+		if(str.GetLength()) rEngine.Print(str, THU_PRINT_INFO);
+		rEngine.Print();
+
+		// Output present flags
+
+		str.Empty();
+		PrintFlags(rCaps.PresentationIntervals, H2D_SZ_PRESENT, H2D_DW_PRESENT, sizeof(H2D_DW_PRESENT) / sizeof(DWORD), str, L"   ", L"\n");
+		if(str.GetLength()) rEngine.Print(str, THU_PRINT_INFO);
+		rEngine.Print();
+
+		// Output cursor flags
+
+		str.Empty();
+		PrintFlags(rCaps.CursorCaps, H2D_SZ_CURSOR, H2D_DW_CURSOR, sizeof(H2D_DW_CURSOR) / sizeof(DWORD), str, L"   ", L"\n");
+		if(str.GetLength()) rEngine.Print(str, THU_PRINT_INFO);
+		rEngine.Print();
+
+		// Output devcaps flags
+
+		str.Empty();
+		PrintFlags(rCaps.DevCaps, H2D_SZ_DEVCAPS_4, H2D_DW_DEVCAPS_4, sizeof(H2D_DW_DEVCAPS_4) / sizeof(DWORD), str, L"   ", L"\n");
+		if(str.GetLength()) rEngine.Print(str, THU_PRINT_INFO);
+		rEngine.Print();
+
+		// Output primitive flags
+
+		str.Empty();
+		PrintFlags(rCaps.PrimitiveMiscCaps, H2D_SZ_PRIM, H2D_DW_PRIM, sizeof(H2D_DW_PRIM) / sizeof(DWORD), str, L"   ", L"\n");
+		if(str.GetLength()) rEngine.Print(str, THU_PRINT_INFO);
+		rEngine.Print();
+
+		// Output raster flags
+
+		str.Empty();
+		PrintFlags(rCaps.RasterCaps, H2D_SZ_RAST, H2D_DW_RAST, sizeof(H2D_DW_RAST) / sizeof(DWORD), str, L"   ", L"\n");
+		if(str.GetLength()) rEngine.Print(str, THU_PRINT_INFO);
+		rEngine.Print();
+
+		// Output ZCmpCaps flags
+
+		str.Empty();
+		PrintFlags(rCaps.ZCmpCaps, H2D_SZ_ZCMP, H2D_DW_ZCMP, sizeof(H2D_DW_ZCMP) / sizeof(DWORD), str, L"   ", L"\n");
+		if(str.GetLength()) rEngine.Print(str, THU_PRINT_INFO);
+		rEngine.Print();
+
+		// Output srcblend flags
+
+		str.Empty();
+		PrintFlags(rCaps.SrcBlendCaps, H2D_SZ_SRCBLEND, H2D_DW_SRCBLEND, sizeof(H2D_DW_SRCBLEND) / sizeof(DWORD), str, L"   ", L"\n");
+		if(str.GetLength()) rEngine.Print(str, THU_PRINT_INFO);
+		rEngine.Print();
+
+		// Output destblend flags
+
+		str.Empty();
+		PrintFlags(rCaps.DestBlendCaps, H2D_SZ_SRCBLEND, H2D_DW_SRCBLEND, sizeof(H2D_DW_SRCBLEND) / sizeof(DWORD), str, L"   ", L"\n");
+		if(str.GetLength()) rEngine.Print(str, THU_PRINT_INFO);
+		rEngine.Print();
+
+		// Output alphacmp flags
+
+		str.Empty();
+		PrintFlags(rCaps.AlphaCmpCaps, H2D_SZ_ZCMP, H2D_DW_ZCMP, sizeof(H2D_DW_ZCMP) / sizeof(DWORD), str, L"   ", L"\n");
+		if(str.GetLength()) rEngine.Print(str, THU_PRINT_INFO);
+		rEngine.Print();
+
+		// Output texture flags
+
+		str.Empty();
+		PrintFlags(rCaps.TextureCaps, H2D_SZ_TEX, H2D_DW_TEX, sizeof(H2D_DW_TEX) / sizeof(DWORD), str, L"   ", L"\n");
+		if(str.GetLength()) rEngine.Print(str, THU_PRINT_INFO);
+		rEngine.Print();
+
+		// Output texture filter flags
+
+		str.Empty();
+		PrintFlags(rCaps.TextureFilterCaps, H2D_SZ_TEXF, H2D_DW_TEXF, sizeof(H2D_DW_TEXF) / sizeof(DWORD), str, L"   ", L"\n");
+		if(str.GetLength()) rEngine.Print(str, THU_PRINT_INFO);
+		rEngine.Print();
+
+		rEngine.Print(L"END DIRECT3D CAPABILITIES", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"dscaps") == 0)
+	{
+		// DirectSound capabilities
+
+		if(rEngine.GetDSound() == NULL)
+		{
+			rEngine.Print(L"directsound not initialized.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+		
+		DSCAPS caps;
+		caps.dwSize = sizeof(DSCAPS);
+
+		if(FAILED(rEngine.GetDSound()->GetCaps(&caps)))
+		{
+			rEngine.Print(L"failed to get directsound capabilities.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		DWORD dwSpeaker = 0;
+
+		if(FAILED(rEngine.GetDSound()->GetSpeakerConfig(&dwSpeaker)))
+		{
+			rEngine.Print(L"failed to get directsound speaker configuration.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		rEngine.Print(L"\nBEGIN DIRECTSOUND CAPABILITIES", THU_PRINT_INFO);
+
+		DWORD dwSpeakerConfig = DSSPEAKER_CONFIG(dwSpeaker);
+		DWORD dwSpeakerGeometry = DSSPEAKER_GEOMETRY(dwSpeaker);
+
+		rEngine.Print(L"   speaker configuration:", THU_PRINT_INFO);
+
+		PrintFlags(dwSpeakerConfig, H2D_SZ_SPEAKERCONFIG, H2D_DW_SPEAKERCONFIG, sizeof(H2D_DW_SPEAKERCONFIG) / sizeof(DWORD), str, L"   ", L"\n");
+
+		rEngine.Print(str, THU_PRINT_INFO);
+
+		rEngine.Print(L"\n   speaker geometry:", THU_PRINT_INFO);
+
+		PrintFlags(dwSpeakerGeometry, H2D_SZ_SPEAKERGEOMETRY, H2D_DW_SPEAKERGEOMETRY, sizeof(H2D_DW_SPEAKERCONFIG) / sizeof(DWORD), str, L"   ", L"\n");
+
+		rEngine.Print(str, THU_PRINT_INFO);
+
+		rEngine.Print(NULL, THU_PRINT_INFO);
+
+		LPCWSTR pszUnits[3] = { NULL };
+
+		float fHardware = FormatMemory(int(caps.dwTotalHwMemBytes), pszUnits);
+		float fHardwareFree = FormatMemory(int(caps.dwFreeHwMemBytes), pszUnits + 1);
+		float fLargestBlock = FormatMemory(int(caps.dwMaxContigFreeHwMemBytes), pszUnits + 2);
+
+		str.Format(L"   min secondary sample rate = %u\n"
+			       L"   max secondary sample rate = %u\n"
+				   L"   primary buffers supported = %u\n\n"
+
+				   L"   max buffers               = %u\n"
+				   L"   max static buffers        = %u\n"
+				   L"   max streaming buffers     = %u\n"
+				   L"   free buffers              = %u\n"
+				   L"   free static buffers       = %u\n"
+				   L"   free streaming buffers    = %u\n\n"
+
+				   L"   max 3d buffers            = %u\n"
+				   L"   max static 3d buffers     = %u\n"
+				   L"   max streaming 3d buffers  = %u\n"
+				   L"   free 3d buffers           = %u\n"
+				   L"   free static 3d buffers    = %u\n"
+				   L"   free streaming 3d buffers = %u\n\n"
+
+				   L"   total hardware memory     = %.3f %s\n"
+				   L"   free hardware memory      = %.3f %s\n"
+				   L"   hardware memory used      = %g%%\n"
+				   L"   hardware memory free      = %g%%\n"
+				   L"   largest free block size   = %.3f %s\n"
+				   L"   hardware transfer rate    = %u KB/s\n"
+				   L"   software buffer overhead  = %u%% of CPU clock cycles\n",
+
+				   caps.dwMinSecondarySampleRate,
+				   caps.dwMaxSecondarySampleRate,
+				   caps.dwPrimaryBuffers,
+
+				   caps.dwMaxHwMixingAllBuffers,
+				   caps.dwMaxHwMixingStaticBuffers,
+				   caps.dwMaxHwMixingStreamingBuffers,
+				   caps.dwFreeHwMixingAllBuffers,
+				   caps.dwFreeHwMixingStaticBuffers,
+				   caps.dwFreeHwMixingStreamingBuffers,
+
+				   caps.dwMaxHw3DAllBuffers,
+				   caps.dwMaxHw3DStaticBuffers,
+				   caps.dwMaxHw3DStreamingBuffers,
+				   caps.dwFreeHw3DAllBuffers,
+				   caps.dwFreeHw3DStaticBuffers,
+				   caps.dwFreeHw3DStreamingBuffers,
+				   
+				   fHardware, pszUnits[0],
+				   fHardwareFree, pszUnits[1],
+				   caps.dwTotalHwMemBytes ? float(caps.dwTotalHwMemBytes - caps.dwFreeHwMemBytes) / float(caps.dwTotalHwMemBytes) * 100.0f : 0.0f,
+				   caps.dwTotalHwMemBytes ? float(caps.dwFreeHwMemBytes) / float(caps.dwTotalHwMemBytes) * 100.0f : 0.0f,
+				   fLargestBlock, pszUnits[2],
+				   caps.dwUnlockTransferRateHwBuffers,
+				   caps.dwPlayCpuOverheadSwBuffers);
+
+		rEngine.Print(str, THU_PRINT_INFO);
+
+		PrintFlags(caps.dwFlags, H2D_SZ_DSCAPS, H2D_DW_DSCAPS, sizeof(H2D_DW_DSCAPS) / sizeof(DWORD), str, L"   ", L"\n");
+
+		rEngine.Print(str, THU_PRINT_INFO);
+
+		rEngine.Print(L"END DIRECTSOUND CAPABILITIES", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"textures") == 0)
+	{
+		rEngine.Print(L"\nBEGIN TEXTURES", THU_PRINT_INFO);
+
+		n = 0;
+
+		for(map<CThunderString, CThunderTexture*>::const_iterator pos = rEngine.GetTextures().GetFirstPosConst();
+			pos != rEngine.GetTextures().GetLastPosConst();
+			pos++, n++)
+		{
+			const CThunderTexture* pTex = pos->second;
+			if(NULL == pTex) continue;
+
+			// TODO: typeof static, cube, dynamic or render target
+
+			str.Format(L"%3d %3d \"%s\" %dx%d",
+						n,
+						pTex->GetRefCount(),
+						pTex->GetName(),
+						pTex->GetInfo().Width,
+						pTex->GetInfo().Height);
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END TEXTURES", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"texturesheets") == 0)
+	{
+		rEngine.Print(L"\nBEGIN TEXTURE SHEETS", THU_PRINT_INFO);
+
+		n = 0;
+
+		for(map<CThunderString, CThunderTextureSheet*>::const_iterator pos = rEngine.GetTextureSheets().GetFirstPosConst();
+			pos != rEngine.GetTextureSheets().GetLastPosConst();
+			pos++, n++)
+		{
+			const CThunderTextureSheet* pTexSheet = pos->second;
+			if(NULL == pTexSheet) continue;
+
+			str.Format(L"%3d %3d \"%s\"", n, pTexSheet->GetRefCount(), pTexSheet->GetName());
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END TEXTURE SHEETS", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"map.texturesheets") == 0)
+	{
+		const CThunderMap* pMap = rEngine.GetCurrentMapConst();
+
+		if(NULL == pMap)
+		{
+			rEngine.Print(L"no current map.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		rEngine.Print(L"\nBEGIN CURRENT MAP TEXTURE SHEETS", THU_PRINT_INFO);
+
+		nCount = pMap->GetTextureSheetCount();
+
+		for(n = 0; n < nCount; n++)
+		{
+			const CThunderTextureSheet* pTexSheet = pMap->GetTextureSheetConst(n);
+			if(NULL == pTexSheet) continue;
+
+			str.Format(L"%3d %3d   \"%s\"", n, pTexSheet->GetRefCount(), pTexSheet->GetName());
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END CURRENT MAP TEXTURE SHEETS", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"animations") == 0)
+	{
+		rEngine.Print(L"\nBEGIN ANIMATIONS", THU_PRINT_INFO);
+
+		nCount = rEngine.GetAnimations().GetCount();
+
+		n = 0;
+
+		for(map<CThunderString, CThunderAnimation*>::const_iterator pos = rEngine.GetAnimations().GetFirstPosConst();
+			pos != rEngine.GetAnimations().GetLastPosConst();
+			pos++)
+		{
+			const CThunderAnimation* pAnim = pos->second;
+			if(NULL == pAnim) continue;
+
+			str.Format(L"%3d %3d \"%s\"", n, pAnim->GetRefCount(), pAnim->GetName());
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END ANIMATIONS", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"map.animations") == 0)
+	{
+		const CThunderMap* pMap = rEngine.GetCurrentMapConst();
+
+		if(NULL == pMap)
+		{
+			rEngine.Print(L"no current map.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		rEngine.Print(L"\nBEGIN CURRENT MAP ANIMATIONS", THU_PRINT_INFO);
+
+		nCount = pMap->GetAnimationCount();
+
+		for(n = 0; n < nCount; n++)
+		{
+			const CThunderAnimation* pAnim = pMap->GetAnimationConst(n);
+			if(NULL == pAnim) continue;
+
+			str.Format(L"%3d %3d \"%s\"", n, pAnim->GetRefCount(), pAnim->GetName());
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"\nEND CURRENT MAP ANIMATIONS", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"sprites") == 0)
+	{
+		rEngine.Print(L"\nBEGIN SPRITES", THU_PRINT_INFO);
+
+		n = 0;
+
+		for(map<CThunderString, CThunderSprite*>::const_iterator pos = rEngine.GetSprites().GetFirstPosConst();
+			pos != rEngine.GetSprites().GetLastPosConst();
+			pos++, n++)
+		{
+			const CThunderSprite* pSprite = pos->second;
+			if(NULL == pSprite) continue;
+
+			str.Format(L"%3d %3d \"%s\"", n, pSprite->GetRefCount(), pSprite->GetName());
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END SPRITES", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"texturefonts") == 0)
+	{
+		rEngine.Print(L"\nBEGIN TEXTURE FONTS", THU_PRINT_INFO);
+
+		n = 0;
+
+		for(map<CThunderString, CThunderTextureFont*>::const_iterator pos = rEngine.GetTextureFonts().GetFirstPosConst();
+			pos != rEngine.GetTextureFonts().GetLastPosConst();
+			pos++, n++)
+		{
+			const CThunderTextureFont* pTexFont = pos->second;
+			if(NULL == pTexFont) continue;
+
+			str.Format(L"%3d %3d \"%s\"", n, pTexFont->GetRefCount(), pTexFont->GetName());
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END TEXTURE FONTS", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"stringtables") == 0)
+	{
+		rEngine.Print(L"\nBEGIN STRING TABLES", THU_PRINT_INFO);
+
+		n = 0;
+
+		for(map<CThunderString, CThunderStringTable*>::const_iterator pos = rEngine.GetStringTables().GetFirstPosConst();
+			pos != rEngine.GetStringTables().GetLastPosConst();
+			pos++, n++)
+		{
+			const CThunderStringTable* pStringTable = pos->second;
+			if(NULL == pStringTable) continue;
+
+			str.Format(L"%3d %3d \"%s\"", n, pStringTable->GetRefCount(), pStringTable->GetName());
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END STRING TABLES", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"sounds") == 0)
+	{
+		rEngine.Print(L"\nBEGIN SOUNDS", THU_PRINT_INFO);
+
+		n = 0;
+
+		for(map<CThunderString, CThunderSound*>::const_iterator pos = rEngine.GetSounds().GetFirstPosConst();
+			pos != rEngine.GetSounds().GetLastPosConst();
+			pos++, n++)
+		{
+			const CThunderSound* pSound = pos->second;
+			if(NULL == pSound) continue;
+
+			str.Format(L"%3d %3d \"%s\"", n, pSound->GetRefCount(), pSound->GetName());
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END SOUNDS", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"map.sounds") == 0)
+	{
+		const CThunderMap* pMap = rEngine.GetCurrentMapConst();
+
+		if(NULL == pMap)
+		{
+			rEngine.Print(L"no current map.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		rEngine.Print(L"\nBEGIN CURRENT MAP SOUNDS", THU_PRINT_INFO);
+
+		nCount = pMap->GetSoundCount();
+
+		for(n = 0; n < nCount; n++)
+		{
+			const CThunderSound* pSound = pMap->GetSoundConst(n);
+			if(NULL == pSound) continue;
+
+			str.Format(L"%3d %3d \"%s\"", n, pSound->GetRefCount(), pSound->GetName());
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END CURRENT MAP SOUNDS", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"music") == 0)
+	{
+		bool bPlayingOnly = false;
+
+		if(rParams.size() > 1)
+		{
+			if(rParams[1].GetVarType() != THU_VAR_BOOL && rParams[1].GetVarType() != THU_VAR_INT)
+			{
+				rEngine.Print(L"invalid param type (1): expected int or bool.", THU_PRINT_ERROR);
+				return FALSE;
+			}
+
+			bPlayingOnly = rParams[1].GetBoolValue();
+		}
+
+		if(true == bPlayingOnly)
+			rEngine.Print(L"\nBEGIN MUSIC", THU_PRINT_INFO);
+		else
+			rEngine.Print(L"\nBEGIN PLAYING MUSIC", THU_PRINT_INFO);
+
+		n = 0;
+
+		for(map<CThunderString, CThunderMusic*>::const_iterator pos = rEngine.GetMusic().GetFirstPosConst();
+			pos != rEngine.GetMusic().GetLastPosConst();
+			pos++, n++)
+		{
+			const CThunderMusic* pMusic = pos->second;
+			if(NULL == pMusic) continue;
+
+			if(true == bPlayingOnly && pMusic->IsFlagSet(THU_MUSIC_PLAYING) == false) continue;
+
+			str.Format(L"%3d %3d \"%s\"", n, pMusic->GetRefCount(), pMusic->GetName());
+
+			if(pMusic->IsFlagSet(THU_MUSIC_PLAYING) == true)
+				str += L" [playing]";
+
+			if(pMusic->IsFlagSet(THU_MUSIC_LOOPING) == true)
+				str += L" [looping]";
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END MUSIC", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"videos") == 0)
+	{
+		rEngine.Print(L"\nBEGIN VIDEOS", THU_PRINT_INFO);
+
+		n = 0;
+
+		for(map<CThunderString, CThunderVideo*>::const_iterator pos = rEngine.GetVideos().GetFirstPosConst();
+			pos != rEngine.GetVideos().GetLastPosConst();
+			pos++)
+		{
+			str.Format(L"%3d %3d \"%s\"", n, pos->second->GetRefCount(), pos->second->GetName());
+
+			if(pos->second->IsFlagSet(THU_VIDEO_PLAYING) == true)
+				str += L" [playing]";
+		}
+
+		rEngine.Print(L"END VIDEOS", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"map.music") == 0)
+	{
+		const CThunderMap* pMap = rEngine.GetCurrentMapConst();
+
+		if(NULL == pMap)
+		{
+			rEngine.Print(L"no current map.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		rEngine.Print(L"BEGIN CURRENT MAP MUSIC", THU_PRINT_INFO);
+
+		nCount = pMap->GetMusicCount();
+
+		for(n = 0; n < nCount; n++)
+		{
+			const CThunderMusic* pMusic = pMap->GetMusicConst(n);
+			if(NULL == pMusic) continue;
+
+			str.Format(L"%3d %3d \"%s\"", n, pMusic->GetRefCount(), pMusic->GetName());
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END CURRENT MAP MUSIC", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"regionsets") == 0)
+	{
+		rEngine.Print(L"\nBEGIN REGION SETS", THU_PRINT_INFO);
+
+		n = 0;
+
+		for(map<CThunderString, CThunderRegionSet*>::const_iterator pos = rEngine.GetRegionSets().GetFirstPosConst();
+			pos != rEngine.GetRegionSets().GetLastPosConst();
+			pos++, n++)
+		{
+			CThunderRegionSet* pRegionSet = pos->second;
+			if(NULL == pRegionSet) continue;
+
+			str.Format(L"%3d %3d \"%s\"", n, pRegionSet->GetRefCount(), pRegionSet->GetName());
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END REGION SETS", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"maps") == 0)
+	{
+		rEngine.Print(L"\nBEGIN MAPS", THU_PRINT_INFO);
+
+		CThunderMapList& rMaps = rEngine.GetMaps();
+
+		n = 0;
+
+		for(list<CThunderMap*>::const_iterator pos = rMaps.GetFirstPosConst();
+			pos != rMaps.GetLastPosConst();
+			pos++, n++)
+		{
+			str.Format(L" %2d \"%s\" ( \"%s\" )", n, (*pos)->GetName(), (*pos)->GetClass());
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END MAPS", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"map.actors") == 0)
+	{
+		CThunderMap* pMap = rEngine.GetCurrentMap();
+
+		if(NULL == pMap)
+		{
+			rEngine.Print(L"no current map.", THU_PRINT_INFO);
+			return FALSE;
+		}
+
+		rEngine.Print(L"BEGIN CURRENT MAP ACTORS", THU_PRINT_INFO);
+
+		CThunderString strFlags;
+
+		n = 0;
+
+		for(map<CThunderString, CThunderActor*>::const_iterator pos = pMap->GetFirstActorPosConst();
+			pos != pMap->GetLastActorPosConst();
+			pos++, n++)
+		{
+			CThunderActor* pActor = pos->second;
+			if(NULL == pActor) continue;
+
+			PrintFlags(pActor->GetFlags(), H2D_SZ_ACTORFLAGS, H2D_DW_ACTORFLAGS, sizeof(H2D_DW_ACTORFLAGS) / sizeof(DWORD), strFlags, L"", L" | ");
+
+			str.Format(L"%3d \"%s\" ( \"%s\" ) [ %g, %g, %g ] [ %g, %g ]\n   [ %s ]",
+						n,
+						pActor->GetName(),
+						pActor->GetClass(),
+						pActor->GetPosition().tx,
+						pActor->GetPosition().ty,
+						pActor->GetPosition().tz,
+						pActor->GetSprite()->GetTileSize().tx,
+						pActor->GetSprite()->GetTileSize().ty,
+						strFlags);
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END CURRENT MAP ACTORS", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"map.visibleactors") == 0)
+	{
+		CThunderMap* pMap = rEngine.GetCurrentMap();
+
+		if(NULL == pMap)
+		{
+			rEngine.Print(L"no current map.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		rEngine.Print(L"\nBEGIN CURRENT MAP VISIBLE ACTORS", THU_PRINT_INFO);
+
+		n = 0;
+
+		for(vector<CThunderActor*>::const_iterator pos = pMap->GetVisibleActorsConst().GetFirstPosConst();
+			pos != pMap->GetVisibleActorsConst().GetLastPosConst();
+			pos++, n++)
+		{
+			CThunderActor* pActor = *pos;
+
+			str.Format(L"%3d \"%s\" ( \"%s\" ) [ %g, %g, %g ] [ %g, %g ]\n   cached [ %d, %d, %d ] [ %d, %d ]",
+				n,
+				pActor->GetName(),
+				pActor->GetClass(),
+				pActor->GetPosition().tx,
+				pActor->GetPosition().ty,
+				pActor->GetPosition().tz,
+				pActor->GetSprite()->GetTileSize().tx,
+				pActor->GetSprite()->GetTileSize().ty,
+				int(pActor->GetScreenPosition().x),
+				int(pActor->GetScreenPosition().y),
+				int(pActor->GetScreenPosition().z),
+				int(pActor->GetSprite()->GetSize().cx),
+				int(pActor->GetSprite()->GetSize().cy));
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END CURRENT MAP VISIBLE ACTORS", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"variables") == 0)
+	{
+		rEngine.Print(L"\nBEGIN VARIABLES", THU_PRINT_INFO);
+
+		n = 0;
+
+		CThunderString strValue;
+
+		for(map<CThunderString, CThunderVariable*>::const_iterator pos = rEngine.GetVariablesConst().GetFirstPosConst();
+			pos != rEngine.GetVariablesConst().GetLastPosConst();
+			pos++, n++)
+		{
+			str.Format(L"%3d %s = ", n, pos->first);
+
+			pos->second->ToString(strValue);
+
+			str += strValue;
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END VARIABLES", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"map.variables") == 0)
+	{
+		CThunderMap* pMap = rEngine.GetCurrentMap();
+
+		if(NULL == pMap)
+		{
+			rEngine.Print(L"no current map.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		rEngine.Print(L"\nBEGIN CURRENT MAP VARIABLES", THU_PRINT_INFO);
+
+		n = 0;
+
+		CThunderString strValue;
+
+		for(map<CThunderString, CThunderVariable*>::const_iterator pos = pMap->GetVariablesConst().GetFirstPosConst();
+			pos != pMap->GetVariablesConst().GetLastPosConst();
+			pos++, n++)
+		{
+			str.Format(L"%3d %s = ", n, pos->first);
+
+			pos->second->ToString(strValue);
+
+			str += strValue;
+		}
+
+		rEngine.Print(L"END CURRENT MAP VARIABLES", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"commands") == 0)
+	{
+		rEngine.Print(L"\nBEGIN COMMANDS", THU_PRINT_INFO);
+
+		n = 0;
+
+		for(map<CThunderString, CThunderCommand*>::const_iterator pos = rEngine.GetCommandsConst().GetFirstPosConst();
+			pos	!= rEngine.GetCommandsConst().GetLastPosConst();
+			pos++, n++)
+		{			
+			str.Format(L"%3d %s [0x%x]", n, pos->first, pos->second->GetCallback());
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END COMMANDS", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"soundinstances") == 0)
+	{
+		rEngine.Print(L"\nBEGIN SOUND INSTANCES", THU_PRINT_INFO);
+
+		n = 0;
+
+		for(list<CThunderSoundInstance*>::const_iterator pos = rEngine.GetSoundInstancesConst().GetFirstPosConst();
+			pos != rEngine.GetSoundInstancesConst().GetLastPosConst();
+			pos++, n++)
+		{
+			str.Format(L"%3d \"%s\"", n, (*pos)->GetSound().GetName());
+
+			if((*pos)->IsFlagSet(THU_SOUNDINST_PLAYING) == true)
+				str += L" [playing]";
+			
+			if((*pos)->IsFlagSet(THU_SOUNDINST_LOOPING) == true)
+				str += L" [looping]";
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END SOUND INSTANCES", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"screens") == 0)
+	{
+		rEngine.Print(L"\nBEGIN SCREENS", THU_PRINT_INFO);
+
+		n = 0;
+
+		for(list<CThunderScreen*>::const_iterator pos = rEngine.GetScreensConst().GetFirstPosConst();
+			pos != rEngine.GetScreensConst().GetLastPosConst();
+			pos++, n++)
+		{
+			CThunderScreen* pScreen = *pos;
+
+			if(NULL == pScreen) continue;
+
+			str.Format(L"%3d \"%s\" (\"%s\") (%d, %d) (%d, %d)", n, pScreen->GetName(), pScreen->GetClass(), pScreen->GetPosition().x, pScreen->GetPosition().y, pScreen->GetSize().cx, pScreen->GetSize().cy);
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END SCREENS", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"timers") == 0)
+	{
+		rEngine.Print(L"\nBEGIN TIMERS", THU_PRINT_INFO);
+
+		n = 0;
+
+		for(list<CThunderTimer*>::const_iterator pos = rEngine.GetTimers().GetFirstPosConst();
+			pos != rEngine.GetTimers().GetLastPosConst();
+			pos++, n++)
+		{
+			CThunderTimer* pTimer = *pos;
+
+			str.Format(L"%3d id: %d, target: \"%s\" interval: %g seconds, last fired: %g seconds ago",
+						n,
+						pTimer->GetID(),
+						pTimer->GetTarget()->GetName(),
+						pTimer->GetInterval(),
+						rEngine.GetRunTime() - pTimer->GetLastFiredTime());
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END TIMERS", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"fonts") == 0)
+	{
+		rEngine.Print(L"\nBEGIN FONTS", THU_PRINT_INFO);
+
+		n = 0;
+
+		for(list<CThunderFont*>::const_iterator pos = rEngine.GetFonts().GetFirstPosConst();
+			pos != rEngine.GetFonts().GetLastPosConst();
+			pos++, n++)
+		{
+			CThunderFont* pFont = *pos;
+
+			str.Format(L"%3d %3d  \"%s\" %d%s%s",
+				n,
+				pFont->GetRefCount(),
+				pFont->GetName(),
+				pFont->GetSize(),
+				pFont->IsBold() ? L" bold" : L"",
+				pFont->IsItalic() ? L" italic" : L"");
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END FONTS", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"classes") == 0)
+	{
+		rEngine.Print(L"\nBEGIN CLASSES", THU_PRINT_INFO);
+
+		n = 0;
+
+		for(map<CThunderString, PCREATECLASSCALLBACK>::const_iterator pos = rEngine.GetClasses().GetFirstPos();
+			pos != rEngine.GetClasses().GetLastPos();
+			pos++, n++)
+		{
+			str.Format(L"%3d \"%s\" [0x%x]", n, pos->first, pos->second);
+
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END CLASSES", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"controls") == 0)
+	{
+		rEngine.Print(L"\nBEGIN CONTROLS", THU_PRINT_INFO);
+
+		for(int n = 0; n < H2D_CONTROL_COUNT; n++)
+		{
+			str.Format(L"   %s: %s", H2D_SZ_CONTROLS[n], H2D_SZ_VKMAP[dynamic_cast<CHitman2DGame*>(rEngine.GetGameInstance())->m_nControls[n]]);
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END CONTROLS", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"cachedstreams") == 0)
+	{
+		rEngine.Print(L"\nBEGIN CACHED STREAMS", THU_PRINT_INFO);
+
+		int n = 0;
+
+		for(map<CThunderString, CThunderStreamData*>::const_iterator pos = rEngine.GetStreamCacheConst().GetFirstPosConst();
+			pos != rEngine.GetStreamCacheConst().GetLastPosConst();
+			pos++, n++)
+		{
+			str.Format(L"%3d   \"%s\" [0x%x:%d] (%f seconds before eviction)",
+					   n,
+					   pos->first,
+					   pos->second->GetData(),
+					   pos->second->GetDataSize(),
+					   pos->second->GetLastRequestTime() +
+						float(rEngine.GetOption(THU_OPTION_STREAMCACHEDURATION)) -
+						rEngine.GetRunTime());
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END CACHED STREAMS", THU_PRINT_INFO);
+	}
+	else if(wcscmp(rParams[0].GetStringValue(), L"cachedresources") == 0)
+	{
+		rEngine.Print(L"\nBEGIN CACHED RESOURCES", THU_PRINT_INFO);
+
+		int n = 0;
+
+		for(map<CThunderString, CThunderResource*>::const_iterator pos = rEngine.GetResourceCache().GetFirstPosConst();
+			pos != rEngine.GetResourceCache().GetLastPosConst();
+			pos++, n++)
+		{
+			str.Format(L"%3d   \"%s\" (%f seconds before discard)", n, pos->first, pos->second->GetDiscardTime() + pos->second->GetPersistenceTime() - rEngine.GetRunTime());
+			rEngine.Print(str, THU_PRINT_INFO);
+		}
+
+		rEngine.Print(L"END CACHED RESOURCES", THU_PRINT_INFO);
+	}
+	else
+	{
+		rEngine.Print(L"invalid list value, see help.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_about(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	CHitman2DGame* pGame = dynamic_cast<CHitman2DGame*>(rEngine.GetGameInstance());
+	if(NULL == pGame) return FALSE;
+
+	rEngine.Print(L"\nBEGIN GAME INFORMATION", THU_PRINT_INFO);
+
+	CThunderString str;
+
+	str.Format(L"   title                = \"%s\"\n"
+			   L"   version              =  %d.%d.%d.%d\n"
+			   L"   description          = \"%s\"\n"
+			   L"   profile              = \"%s\"\n"
+			   L"   logfile              = \"%s\"\n"
+			   L"   script               = \"%s\"\n"
+			   L"   executable           = \"%s\"\n"
+			   L"   executable directory = \"%s\"\n"
+			   L"   base directory       = \"%s\"",
+
+			   pGame->m_strTitle,
+			   pGame->m_nVersion[THU_VERSION_MAJOR],
+			   pGame->m_nVersion[THU_VERSION_MINOR],
+			   pGame->m_nVersion[THU_VERSION_REVISION],
+			   pGame->m_nVersion[THU_VERSION_BUILD],
+			   pGame->m_strDescription,
+			   pGame->m_strProfilePath,
+			   pGame->m_strLogFilePath,
+			   pGame->m_strScriptPath,
+			   pGame->m_strExeTitle,
+			   pGame->m_strExeDir,
+			   rEngine.GetBaseDirectory());
+
+	rEngine.Print(str, THU_PRINT_INFO);
+
+	rEngine.Print(L"END GAME INFORMATION", THU_PRINT_INFO);
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_pony(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	rEngine.Print(
+		L"           .,,.\n"
+		L"         ,;;*;;;;,\n"
+		L"        .-'``;-');;.\n"
+		L"       /'  .-.  /*;;\n"
+		L"     .'    \\d    \\;;               .;;;,\n"
+		L"    / o      `    \\;    ,__.     ,;*;;;*;,\n"
+		L"    \\__, _.__,'   \\_.-') __)--.;;;;;*;;;;,\n"
+		L"     `__`;;;\\       /-')_) __)  `\\' ';;;;;;\n"
+		L"        ;*;;;        -') `)_)  |\\ |  ;;;;*;\n"
+		L"        ;;;;|        `---`    O | | ;;*;;;\n"
+		L"        *;*;\\|                 O  / ;;;;;*\n"
+		L"       ;;;;;/|    .-------\\      / ;*;;;;;\n"
+		L"      ;;;*;/ \\    |        '.   (`. ;;;*;;;\n"
+		L"      ;;;;;'. ;   |          )   \\ | ;;;;;;\n"
+		L"      ,;*;;;;\\/   |.        /   /` | ';;;*;\n"
+		L"       ;;;;;;/    |/       /   /__/   ';;;\n"
+		L"       '*jgs/     |       /    |      ;*;\n"
+		L"            `____`        `____`     ;'\n",
+
+		THU_PRINT_MESSAGE);
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_configure(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	// Relaunch with /configure switch
+
+	CThunderGame* pGame = rEngine.GetGameInstance();
+	if(NULL == pGame) return FALSE;
+
+	pGame->Exit();
+
+	WCHAR szExePath[MAX_PATH] = {0};
+	GetModuleFileName(GetModuleHandle(NULL), szExePath, MAX_PATH);
+
+	WCHAR szCurDir[MAX_PATH] = {0};
+	GetCurrentDirectory(MAX_PATH, szCurDir);
+
+	ShellExecute(NULL, NULL, szExePath, H2D_SZ_CMDSWITCH_CONFIGURE, szCurDir, SW_SHOW);
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_settings(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	CHitman2DGame* pGame = dynamic_cast<CHitman2DGame*>(rEngine.GetGameInstance());
+	if(NULL == pGame) return FALSE;
+
+	rEngine.Print(L"\nBEGIN GAME SETTINGS", THU_PRINT_INFO);
+
+	CThunderString strRefresh;
+
+	if(pGame->m_dwRefreshRate == 0xFFFFFFFF)
+		strRefresh = H2D_SZ_THUDEVICEFORMATS[0];
+	else
+		strRefresh.Format(L"%d", pGame->m_dwRefreshRate);
+
+	CThunderString str;
+
+	str.Format(L"video\n"
+			   L"   resolution      = %dx%d\n"
+			   L"   full screen     = %s\n"
+			   L"   device type     = %s\n"
+			   L"   device format   = %s\n"
+			   L"   refresh rate    = %s\n"
+			   L"   vsync           = %s\n"
+			   L"   swvp            = %s\n"
+			   L"   pure device     = %s\n"
+			   L"audio\n"
+			   L"   exclusive sound = %s\n"
+			   L"   disable sounds  = %s\n"
+			   L"   disable music   = %s\n"
+			   L"   master volume   = %g\n"
+			   L"   master mute     = %s\n"
+			   L"   music volume    = %g\n"
+			   L"   effects volume  = %g\n"
+			   L"   speech volume   = %g\n"
+			   L"system\n"
+			   L"   log mode  = %s",
+
+			   pGame->m_nResolutionWidth,
+			   pGame->m_nResolutionHeight,
+			   pGame->m_bFullScreen ? L"true" : L"false",
+			   H2D_SZ_THUDEVICETYPES[pGame->m_nDeviceType],
+			   H2D_SZ_THUDEVICEFORMATS[pGame->m_nDeviceFormat],
+			   strRefresh,
+			   pGame->m_bVSync ? L"true" : L"false",
+			   pGame->m_bSoftwareVertexProcessing ? L"true" : L"false",
+			   pGame->m_bPureDevice ? L"true" : L"false",
+			   rEngine.GetOption(THU_OPTION_EXCLUSIVESOUND) ? L"true" : L"false",
+			   rEngine.GetOption(THU_OPTION_DISABLESOUNDS) ? L"true" : L"false",
+			   rEngine.GetOption(THU_OPTION_DISABLEMUSIC) ? L"true" : L"false",
+			   rEngine.GetMasterVolume(),
+			   rEngine.GetMasterVolumeMute() ? L"true" : L"false",
+			   pGame->m_fMusicVolume,
+			   pGame->m_fEffectsVolume,
+			   pGame->m_fSpeechVolume,
+			   H2D_SZ_LOGMODES[pGame->m_nLogMode]);
+
+	rEngine.Print(str, THU_PRINT_INFO);
+
+	rEngine.Print(L"END GAME SETTINGS", THU_PRINT_INFO);
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_logmode(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		rEngine.Print(L"invalid syntax: expected enum logmodes logmode, [ string newlogpath. ]", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_ENUM)
+	{
+		rEngine.Print(L"invalid param type (1): enum logmodes expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	CHitman2DGame* pGame = dynamic_cast<CHitman2DGame*>(rEngine.GetGameInstance());
+
+	if(NULL == pGame)
+	{
+		rEngine.GetErrors().Push(new CThunderErrorInvalidPtr(__FUNCTIONW__, L"pGame"));
+
+		PrintLastError(rEngine);
+
+		return FALSE;
+	}
+
+	THU_LOG_MODE nLogMode = (THU_LOG_MODE)rParams[0].GetEnumValue(H2D_SZ_LOGMODES, THU_LOG_COUNT, 0);
+
+	if(rParams.size() > 1)
+	{
+		if(rParams[1].GetVarType() != THU_VAR_STRING)
+		{
+			rEngine.Print(L"invalid param type (2): string expected.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		pGame->SetLogFilePath(rParams[1].GetStringValue());
+	}
+
+	try
+	{
+		pGame->SetLogMode(nLogMode);
+
+		rEngine.Print(L"log mode set successfully.", THU_PRINT_INFO);
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		PrintLastError(rEngine);
+
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_screenshot(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	CHitman2DGame* pGame = dynamic_cast<CHitman2DGame*>(rEngine.GetGameInstance());
+	if(NULL == pGame) return FALSE;
+
+	WCHAR szFileName[MAX_PATH] = {0};
+	WCHAR szCurTime[32] = {0};
+
+	GetCurrentDirectory(MAX_PATH, szFileName);
+	PathAddBackslash(szFileName);
+	wcscat_s(szFileName, MAX_PATH, L"screenshots");
+
+	// Create base\screenshots if does not exist
+
+	if((PathFileExists(szFileName) == FALSE) &&
+		!CreateDirectory(szFileName, NULL))
+	{
+		rEngine.Print(L"failed to create screenshots directory.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	// Figure out filename to use (screenshot_<curtime>.jpg)
+
+	SYSTEMTIME st;
+	GetSystemTime(&st);
+
+	swprintf_s(szCurTime, 32, L"%d-%d-%d %d.png",
+							  (int)st.wMonth,
+							  (int)st.wDay,
+							  (int)st.wYear,
+							  (int)GetTickCount());
+
+	PathAddBackslash(szFileName);
+	wcscat_s(szFileName, MAX_PATH, szCurTime);
+
+	// Take the screenshot and save it
+
+	try
+	{
+		rEngine.GetGraphics().Screenshot(szFileName, D3DXIFF_PNG);
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		PrintLastError(rEngine);
+		return FALSE;
+	}
+
+	CThunderString str;
+	str.Format(L"screenshot: \"%s\"", szFileName);
+
+	rEngine.Print(str, THU_PRINT_INFO);
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_fillmode(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	// TODO: reimp
+
+	/*
+	int nFillMode = 0;
+
+	if(rParams.empty() == true)
+	{
+		// If called without parameters, cycle fill mode
+
+		nFillMode = rEngine.GetOption(THU_OPTION_FILLMODE) + 1;		
+		if(nFillMode == THU_FILL_COUNT) nFillMode = THU_FILL_TEXTURE;
+	}
+	else
+	{
+		// If called with one parameter, specified new fill mode to set
+
+		if(rParams[0].GetVarType() != THU_VAR_INT && rParams[0].GetVarType() != THU_VAR_BOOL)
+		{
+			rEngine.Print(L"invalid param type (1): expected int or bool.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		// Check for out of range values
+
+		nFillMode = rParams[0].GetIntValue();
+
+		if(nFillMode < THU_FILL_TEXTURE || nFillMode > THU_FILL_COLOR)
+		{
+			rEngine.Print(L"invalid param (1): value out of range.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		// Set it
+
+		rEngine.SetOption(THU_OPTION_FILLMODE, nFillMode);
+	}
+	*/
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_shell(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		rEngine.Print(L"invalid syntax: expected string path.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_STRING)
+	{
+		rEngine.Print(L"invalid param type (1): string expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	LPCWSTR pszOperation = NULL;
+
+	if(rParams.size() > 1)
+	{
+		if(rParams[1].GetVarType() != THU_VAR_STRING && rParams[1].GetVarType() != THU_VAR_ENUM)
+		{
+			rEngine.Print(L"invalid param type (2): string or enum expected.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		pszOperation = rParams[1].GetStringValue();
+	}
+
+	LPCWSTR pszParameters = NULL;
+
+	if(rParams.size() > 2)
+	{
+		if(rParams[2].GetVarType() != THU_VAR_STRING)
+		{
+			rEngine.Print(L"invalid param type (3): string expected.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		pszParameters = rParams[2].GetStringValue();
+	}
+
+	LPCWSTR pszDirectory = NULL;
+
+	if(rParams.size() > 3)
+	{
+		if(rParams[3].GetVarType() != THU_VAR_STRING)
+		{
+			rEngine.Print(L"invalid param type (4): string expected.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		pszDirectory = rParams[3].GetStringValue();
+	}
+
+	int nShowCmd = SW_SHOW;
+
+	if(rParams.size() > 4)
+	{
+		if(rParams[4].GetVarType() != THU_VAR_ENUM)
+		{
+			rEngine.Print(L"invalid param type (5): enum showtypes expected.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		nShowCmd = rParams[4].GetEnumValue(H2D_SZ_SWFLAGS, H2D_N_SWFLAGS, sizeof(H2D_N_SWFLAGS) / sizeof(int), SW_SHOW);
+	}
+
+	ShellExecute(rEngine.GetGameWindow(), pszOperation, rParams[0].GetStringValue(), pszParameters, pszDirectory, nShowCmd);
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_execute(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		rEngine.Print(L"invalid syntax: string scriptfile expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_STRING)
+	{
+		rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	LPCWSTR pszLabel = NULL;
+
+	if(rParams.size() > 1)
+	{
+		if(rParams[1].GetVarType() != THU_VAR_STRING)
+		{
+			rEngine.Print(L"invalid param type (2): expected string.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		pszLabel = rParams[1].GetStringValue();
+	}
+
+	// Find script file
+
+	LPCWSTR pszPath = rParams[0].GetStringValue();
+
+	WCHAR szSpecialPath[MAX_PATH] = {0};
+
+	if((PathFindFileName(pszPath) == pszPath) && PathFileExists(pszPath) == FALSE)
+	{
+		// If only file name specified, and file does not exist in current directory, search base\scripts
+		
+		wcscpy_s(szSpecialPath, MAX_PATH, rEngine.GetBaseDirectory());
+		PathAppend(szSpecialPath, L"scripts");
+		PathAppend(szSpecialPath, pszPath);
+		
+		LPWSTR pszExt = PathFindExtension(szSpecialPath);
+
+		if(*pszExt == L'\0' || wcscmp(pszExt, L".thc") != 0)
+			wcscpy_s(pszExt, 5, L".thc");
+
+		pszPath = szSpecialPath;
+	}
+
+	// Execute the script
+
+	WCHAR szMsg[256] = {0};
+
+	wcscpy_s(szMsg, 256, PathFindFileName(rParams[0].GetStringValue()));
+
+	try
+	{
+		rEngine.GetCommands().ExecuteScriptFile(pszPath, pszLabel);
+
+		wcscat_s(szMsg, 256, L" execution complete.");
+
+		rEngine.Print(szMsg, THU_PRINT_INFO);
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		wcscat_s(szMsg, 256, L" execution failed.");
+
+		rEngine.Print(szMsg, THU_PRINT_ERROR);
+
+		PrintLastError(rEngine);
+
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_customcursor(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		// Get
+
+		CThunderVariable var;
+		CThunderString str;
+
+		var.SetBoolValue(rEngine.GetOption(THU_OPTION_CUSTOMCURSOR) == TRUE);
+		var.ToString(str);
+
+		rEngine.Print(str, THU_PRINT_MESSAGE);
+	}
+	else
+	{
+		// Set
+
+		if(rParams[0].GetVarType() != THU_VAR_INT && rParams[0].GetVarType() != THU_VAR_BOOL)
+		{
+			rEngine.Print(L"invalid param type (1): int or bool expected.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		rEngine.SetOption(THU_OPTION_CUSTOMCURSOR, rParams[0].GetIntValue());
+	}
+
+	return FALSE;
+}
+
+int CHitman2DGame::cmd_loadcustomcursor(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		rEngine.Print(L"invalid syntax: expected string texortexsheetpath, [ string texsheetcell | int texsheetcellid | int coords[4] ].", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_STRING)
+	{
+		rEngine.Print(L"invalid param type (1): string expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams.size() > 1)
+	{
+		if(rParams[1].GetVarType() == THU_VAR_STRING)
+		{
+			// This is a texture sheet and a texture sheet cell name
+
+			CThunderTextureSheet* pTexSheet = rEngine.GetTextureSheets().Load(rParams[0].GetStringValue());
+
+			if(NULL == pTexSheet)
+			{
+				PrintLastError(rEngine);
+				return FALSE;
+			}
+
+			pTexSheet->AddRef();
+
+			const CThunderTextureSheetCell& rCell = pTexSheet->GetCellConst(pTexSheet->FindCell(rParams[1].GetStringValue()));
+
+			rEngine.SetCustomCursorTexture(pTexSheet->GetTexture());
+			rEngine.SetCustomCursorSrcPos(rCell.GetSrcRect());
+
+			pTexSheet->Release();
+		}
+		else if(rParams[1].GetVarType() == THU_VAR_INT)
+		{
+			if(rParams.size() == 2)
+			{
+				// This is a texture sheet and a texture sheet cell id
+
+				CThunderTextureSheet* pTexSheet = rEngine.GetTextureSheets().Load(rParams[0].GetStringValue());
+
+				if(NULL == pTexSheet)
+				{
+					PrintLastError(rEngine);
+					return FALSE;
+				}
+
+				pTexSheet->AddRef();
+
+				const CThunderTextureSheetCell& rCell = pTexSheet->GetCellConst(rParams[1].GetIntValue());
+
+				rEngine.SetCustomCursorTexture(pTexSheet->GetTexture());
+				rEngine.SetCustomCursorSrcPos(rCell.GetSrcRect());
+
+				pTexSheet->Release();
+			}
+			else if(rParams.size() == 5)
+			{
+				// This is a texture with x,y,x2,y2 texture coordinates
+
+				CThunderTexture* pTex = rEngine.GetTextures().Load(rParams[0].GetStringValue());
+
+				if(NULL == pTex)
+				{
+					PrintLastError(rEngine);
+					return FALSE;
+				}
+
+				rEngine.SetCustomCursorTexture(pTex);
+				rEngine.SetCustomCursorSrcPos(rParams[1].GetIntValue(), rParams[2].GetIntValue(), rParams[3].GetIntValue(), rParams[4].GetIntValue());
+			}
+		}
+	}
+	else
+	{
+		// This is a texture name only, use the whole texture
+
+		try
+		{
+			rEngine.LoadCustomCursor(rParams[0].GetStringValue());
+		}
+
+		catch(CThunderError& rError)
+		{
+			UNREFERENCED_PARAMETER(rError);
+
+			rEngine.Print(L"failed to load custom cursor.", THU_PRINT_ERROR);
+
+			PrintLastError(rEngine);
+
+			return FALSE;
+		}
+	}
+
+	// Center custom cursor
+
+	const RECT& rcSrcCustomCursor = rEngine.GetCustomCursorSrcPos();
+
+	rEngine.SetCursorPosition(D3DXVECTOR3(float(rEngine.GetGameInstance()->GetResolutionWidth() -
+							(rcSrcCustomCursor.right - rcSrcCustomCursor.left)) / 2.0f,
+							float(rEngine.GetGameInstance()->GetResolutionHeight() -
+							(rcSrcCustomCursor.bottom - rcSrcCustomCursor.top)) / 2.0f,
+							0.0f));
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_showcursor(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		// Get
+
+		CThunderVariable var;
+		CThunderString str;
+
+		var.SetBoolValue(rEngine.GetOption(THU_OPTION_SHOWCURSOR) == TRUE);
+
+		var.ToString(str);
+
+		rEngine.Print(str, THU_PRINT_MESSAGE);
+	}
+	else
+	{
+		// Set
+
+		if(rParams[0].GetVarType() != THU_VAR_BOOL && rParams[0].GetVarType() != THU_VAR_INT)
+		{
+			rEngine.Print(L"invalid param type (1): int or bool expected.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		rEngine.SetOption(THU_OPTION_SHOWCURSOR, rParams[0].GetIntValue());
+	}
+
+	return FALSE;
+}
+
+int CHitman2DGame::cmd_showscreen(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		rEngine.Print(L"invalid syntax: string screenpath expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_STRING)
+	{
+		rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	CThunderScreen* pScreen = NULL;
+
+	if(rParams.size() > 1)
+	{
+		switch(rParams[1].GetVarType())
+		{
+		case THU_VAR_INT:
+			pScreen = rEngine.GetScreens().FindByID(rParams[1].GetIntValue());
+			break;
+		case THU_VAR_STRING:
+			pScreen = rEngine.GetScreens().FindByName(rParams[1].GetStringValue());
+			break;
+		default:
+			rEngine.Print(L"invalid param type (2): expected int or string.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		if(pScreen != NULL)
+		{
+			if(pScreen->IsFlagSet(THU_SCREEN_RENDER_INVISIBLE) == true)
+				pScreen->ClearFlag(THU_SCREEN_RENDER_INVISIBLE);
+
+			rEngine.GetScreens().SetForegroundScreen(pScreen);
+			rEngine.GetScreens().SetActiveScreen(pScreen);
+			rEngine.GetScreens().SetForegroundScreen(pScreen);
+
+			return int(pScreen);
+		}
+	}
+
+	// Find screen in the file system
+
+	LPCWSTR pszPath = rParams[0].GetStringValue();
+
+	WCHAR szSpecialPath[MAX_PATH] = {0};
+
+	if((PathFindFileName(pszPath) == pszPath) && PathFileExists(pszPath) == FALSE)
+	{
+		// If only file name specified, and file does not exist in current directory, search base\screens
+
+		wcscpy_s(szSpecialPath, MAX_PATH, rEngine.GetBaseDirectory());
+		PathAppend(szSpecialPath, L"screens");
+		PathAppend(szSpecialPath, pszPath);
+
+		LPWSTR pszExt = PathFindExtension(szSpecialPath);
+		if(NULL == *pszExt || wcscmp(pszExt, L".thn") != 0) wcscpy_s(pszExt, 5, L".thn");
+
+		pszPath = szSpecialPath;
+	}
+
+	try
+	{
+		pScreen = rEngine.GetScreens().Show(pszPath);
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		PrintLastError(rEngine);
+		return 0;
+	}
+
+	return (int)pScreen;
+}
+
+int CHitman2DGame::cmd_loadscreen(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		rEngine.Print(L"invalid syntax: string screenpath expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_STRING)
+	{
+		rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	CThunderScreen* pScreen = NULL;
+
+	if(rParams.size() > 1)
+	{
+		switch(rParams[1].GetVarType())
+		{
+		case THU_VAR_INT:
+			pScreen = rEngine.GetScreens().FindByID(rParams[1].GetIntValue());
+			break;
+		case THU_VAR_STRING:
+			pScreen = rEngine.GetScreens().FindByName(rParams[1].GetStringValue());
+			break;
+		default:
+			rEngine.Print(L"invalid param type (2): expected int or string.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		if(pScreen) return int(pScreen);
+	}
+
+	// Find screen in the file system
+
+	LPCWSTR pszPath = rParams[0].GetStringValue();
+
+	WCHAR szSpecialPath[MAX_PATH] = {0};
+
+	if((PathFindFileName(pszPath) == pszPath) && PathFileExists(pszPath) == FALSE)
+	{
+		// If only file name specified, and file does not exist in current directory, search base\screens
+
+		wcscpy_s(szSpecialPath, MAX_PATH, rEngine.GetBaseDirectory());
+		PathAppend(szSpecialPath, L"screens");
+		PathAppend(szSpecialPath, pszPath);
+
+		LPWSTR pszExt = PathFindExtension(szSpecialPath);
+		if(NULL == *pszExt || wcscmp(pszExt, L".thn") != 0) wcscpy_s(pszExt, 5, L".thn");
+
+		pszPath = szSpecialPath;
+	}
+
+	// Load screen
+
+	try
+	{
+		pScreen = rEngine.GetScreens().Load(pszPath);
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		PrintLastError(rEngine);
+
+		return FALSE;
+	}
+
+	return (int)pScreen;
+}
+
+int CHitman2DGame::cmd_closescreen(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		// Close all screens except for the active screen
+
+		for(list<CThunderScreen*>::iterator pos = rEngine.GetScreens().GetFirstPos();
+			pos != rEngine.GetScreens().GetLastPos();
+			pos++)
+		{
+			if(*pos != rEngine.GetScreens().GetActiveScreen() && *pos != rEngine.GetScreens().GetFocusScreen() && *pos != rEngine.GetScreens().GetCaptureScreen())
+			{
+				rEngine.GetScreens().Remove(pos, true);
+			}
+		}
+
+		return FALSE;
+	}
+
+	CThunderScreen* pScreen = NULL;
+
+	if(rParams[0].GetVarType() == THU_VAR_STRING)
+	{
+		// Find by name
+
+		pScreen = rEngine.GetScreens().FindByName(rParams[0].GetStringValue());
+	}
+	else if(rParams[0].GetVarType() == THU_VAR_INT)
+	{
+		// Find by id
+
+		pScreen = rEngine.GetScreens().FindByID(rParams[0].GetIntValue());
+	}
+	else
+	{
+		rEngine.Print(L"invalid param type (1): string or int expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(NULL == pScreen)
+	{
+		// Not found
+
+		CThunderString str;
+
+		if(rParams[0].GetVarType() == THU_VAR_STRING)
+		{
+			str.Format(L"screen not found: \"%s\"", rParams[0].GetStringValue());
+		}
+		else
+		{
+			str.Format(L"screen not found: %d", rParams[0].GetIntValue());
+		}
+
+		return FALSE;
+	}
+
+	// If this is an overlapped screen, fade it out
+
+	CHitman2DScreenOverlapped* pOverlapped = dynamic_cast<CHitman2DScreenOverlapped*>(pScreen);
+
+	if(pOverlapped)
+		pOverlapped->Close();
+	else
+		pScreen->Release();
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_showfps(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	CHitman2DScreenFps* pScreenFps = dynamic_cast<CHitman2DScreenFps*>(rEngine.GetScreens().FindByID(1010));
+
+	bool bShow = (pScreenFps == NULL);
+	bool bExtended = false;
+
+	if(rParams.size())
+	{
+		if(rParams[0].GetVarType() != THU_VAR_BOOL && rParams[0].GetVarType() != THU_VAR_INT)
+		{
+			rEngine.Print(L"invalid param type (1): expected int or bool.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		bShow = rParams[0].GetBoolValue();
+
+		if(rParams.size() > 1)
+		{
+			if(rParams[1].GetVarType() != THU_VAR_BOOL && rParams[0].GetVarType() != THU_VAR_INT)
+			{
+				rEngine.Print(L"invalid param type (2): expected int or bool.", THU_PRINT_ERROR);
+				return FALSE;
+			}
+
+			bExtended = rParams[1].GetBoolValue();
+		}
+	}
+
+	if(bShow)
+	{
+		if(pScreenFps)
+		{
+			// Extend or retract fps screen
+
+			if(pScreenFps->GetExtended() != bExtended)
+				pScreenFps->SetExtended(bExtended);
+
+			return TRUE;
+		}
+		else
+		{
+			// Show fps screen when not displayed
+
+			vector<CThunderVariable> params;
+
+			params.resize(1);
+			params[0].SetStringValue(L"fps");
+
+			if(NULL == cmd_showscreen(rEngine, params))
+			{
+				PrintLastError(rEngine);
+				return FALSE;
+			}
+
+			pScreenFps = dynamic_cast<CHitman2DScreenFps*>(rEngine.GetScreens().FindByID(1010));
+
+			if(pScreenFps && pScreenFps->GetExtended() != bExtended)
+				pScreenFps->SetExtended(bExtended);
+		}		
+	}
+	else
+	{
+		if(pScreenFps) pScreenFps->Close();
+	}
+	
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_alignfps(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	CThunderScreen* pScreenFps = rEngine.GetScreens().FindByID(1010);
+
+	if(NULL == pScreenFps)
+	{
+		rEngine.Print(L"failed to align fps screen: not loaded.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	const int OFFSET_TOP = 2;
+	const int OFFSET_LEFT = 2;
+	const int OFFSET_RIGHT = 4;
+	const int OFFSET_BOTTOM = 2;
+
+	for(vector<CThunderVariable>::iterator pos = rParams.begin();
+		pos != rParams.end();
+		pos++)
+	{
+		if((*pos).GetVarType() == THU_VAR_ENUM)
+		{
+			if(wcscmp((*pos).GetStringValue(), L"left") == 0)
+			{
+				// Left
+
+				pScreenFps->SetPosition(OFFSET_LEFT, pScreenFps->GetPosition().y);
+			}
+			else if(wcscmp((*pos).GetStringValue(), L"top") == 0)
+			{
+				// Top
+
+				pScreenFps->SetPosition(pScreenFps->GetPosition().x, OFFSET_TOP);
+			}
+			else if(wcscmp((*pos).GetStringValue(), L"right") == 0)
+			{
+				// Right
+
+				pScreenFps->SetPosition(rEngine.GetGameInstance()->GetResolutionWidth() - pScreenFps->GetSize().cx - OFFSET_RIGHT, pScreenFps->GetPosition().y);
+			}
+			else if(wcscmp((*pos).GetStringValue(), L"bottom") == 0)
+			{
+				// Bottom
+
+				pScreenFps->SetPosition(pScreenFps->GetPosition().x, rEngine.GetGameInstance()->GetResolutionHeight() - pScreenFps->GetSize().cy - OFFSET_BOTTOM);
+			}
+			else if(wcscmp((*pos).GetStringValue(), L"center") == 0)
+			{
+				// Horizontal center
+				
+				pScreenFps->SetPosition((rEngine.GetGameInstance()->GetResolutionWidth() - pScreenFps->GetSize().cx) / 2, pScreenFps->GetPosition().y);
+			}
+		}
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_showstart(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	return FALSE;
+}
+
+int CHitman2DGame::cmd_minimize(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	ShowWindow(rEngine.GetGameWindow(), SW_MINIMIZE);
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_pausegame(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	vector<CThunderVariable> arShowParams;
+
+	arShowParams.resize(1);
+	arShowParams[0].SetStringValue(L"pause");
+
+	cmd_showscreen(rEngine, arShowParams);
+
+	return FALSE;
+}
+
+int CHitman2DGame::cmd_mastervolume(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		// Get
+
+		CThunderVariable var;
+		CThunderString str;
+
+		var.SetFloatValue(rEngine.GetMasterVolume());
+		var.ToString(str);
+
+		rEngine.Print(str, THU_PRINT_MESSAGE);
+	}
+	else
+	{
+		// Set
+
+		if(rParams[0].GetVarType() != THU_VAR_FLOAT)
+		{
+			rEngine.Print(L"invalid param type (1): expected float.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		rEngine.SetMasterVolume(rParams[0].GetFloatValue());
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_mastermute(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		// Get
+
+		CThunderVariable var;
+		CThunderString str;
+
+		var.SetBoolValue(rEngine.GetMasterVolumeMute());
+
+		var.ToString(str);
+
+		rEngine.Print(str, THU_PRINT_MESSAGE);
+	}
+	else
+	{
+		// Set
+
+		if(rParams[0].GetVarType() != THU_VAR_INT || rParams[0].GetVarType() != THU_VAR_BOOL)
+		{
+			rEngine.Print(L"invalid param type (1): expected int or bool.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		try
+		{
+			rEngine.SetMasterVolumeMute(rParams[0].GetBoolValue());
+		}
+
+		catch(CThunderError& rError)
+		{
+			UNREFERENCED_PARAMETER(rError);
+
+			rEngine.Print(L"failed to set master volume mute.", THU_PRINT_ERROR);
+
+			PrintLastError(rEngine);
+
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_musicvolume(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	CHitman2DGame* pGame = dynamic_cast<CHitman2DGame*>(rEngine.GetGameInstance());
+	if(NULL == pGame) return FALSE;
+
+	if(rParams.empty() == true)
+	{
+		// Get
+
+		CThunderVariable var;
+		CThunderString str;
+
+		var.SetFloatValue(pGame->m_fMusicVolume);
+		var.ToString(str);
+
+		rEngine.Print(str, THU_PRINT_MESSAGE);
+	}
+	else
+	{
+		// Set
+
+		if(rParams[0].GetVarType() != THU_VAR_FLOAT)
+		{
+			rEngine.Print(L"invalid param type (1): expected float.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		pGame->SetMusicVolume(rParams[0].GetFloatValue());
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_effectsvolume(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	CHitman2DGame* pGame = dynamic_cast<CHitman2DGame*>(rEngine.GetGameInstance());
+	if(NULL == pGame) return FALSE;
+
+	if(rParams.empty() == true)
+	{
+		// Get
+
+		CThunderVariable var;
+		CThunderString str;
+
+		var.SetFloatValue(pGame->m_fEffectsVolume);
+		var.ToString(str);
+
+		rEngine.Print(str, THU_PRINT_MESSAGE);
+	}
+	else
+	{
+		// Set
+
+		if(rParams[0].GetVarType() != THU_VAR_FLOAT)
+		{
+			rEngine.Print(L"invalid param type (1): expected float.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		pGame->SetEffectsVolume(rParams[0].GetFloatValue());
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_speechvolume(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	CHitman2DGame* pGame = dynamic_cast<CHitman2DGame*>(rEngine.GetGameInstance());
+	if(NULL == pGame) return FALSE;
+
+	if(rParams.empty() == true)
+	{
+		// Get
+
+		CThunderVariable var;
+		CThunderString str;
+
+		var.SetFloatValue(pGame->m_fSpeechVolume);
+		var.ToString(str);
+
+		rEngine.Print(str, THU_PRINT_MESSAGE);
+	}
+	else
+	{
+		// Set
+
+		if(rParams[0].GetVarType() != THU_VAR_FLOAT)
+		{
+			rEngine.Print(L"invalid param type (1): expected float.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		pGame->SetSpeechVolume(rParams[0].GetFloatValue());
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_playsound(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	CHitman2DGame* pGame = dynamic_cast<CHitman2DGame*>(rEngine.GetGameInstance());
+	if(NULL == pGame) return FALSE;
+
+	if(rEngine.GetOption(THU_OPTION_DISABLESOUNDS)) return TRUE;
+	
+	if(rParams.empty() == true)
+	{
+		rEngine.Print(L"invalid syntax: string soundpath, bool loop, enum { effect* | speach } chanel expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_STRING)
+	{
+		rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	// Find sound
+
+	LPCWSTR pszPath = rParams[0].GetStringValue();
+
+	WCHAR szSpecialPath[MAX_PATH] = {0};
+
+	if((PathFindFileName(pszPath) == pszPath) && PathFileExists(pszPath) == FALSE)
+	{
+		// If only file name specified, and file does not exist in current directory, search base\sounds
+		
+		wcscpy_s(szSpecialPath, MAX_PATH, rEngine.GetBaseDirectory());
+		PathAppend(szSpecialPath, L"sounds");
+		PathAppend(szSpecialPath, pszPath);
+		
+		LPWSTR pszExt = PathFindExtension(szSpecialPath);
+		if(NULL == *pszExt || wcscmp(pszExt, L".wav") != 0) wcscpy_s(pszExt, 5, L".wav");
+
+		pszPath = szSpecialPath;
+	}
+
+	// Load sound
+
+	CThunderSound* pSound = rEngine.GetSounds().Load(pszPath);
+
+	if(NULL == pSound)
+	{
+		PrintLastError(rEngine);
+		return FALSE;
+	}
+
+	bool bLoop = false;
+
+	if(rParams.size() > 1)
+	{
+		if(rParams[1].GetVarType() != THU_VAR_INT || rParams[1].GetVarType() != THU_VAR_BOOL)
+		{
+			rEngine.Print(L"invalid param type (2): expected bool.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		bLoop = rParams[1].GetBoolValue();
+	}
+
+	bool bSpeach = false;
+
+	if(rParams.size() > 2)
+	{
+		if(rParams[2].GetVarType() != THU_VAR_ENUM)
+		{
+			rEngine.Print(L"invalid param type (3): expected enum.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		bSpeach = !wcscmp(rParams[2].GetEnumValue(), L"speech");
+	}
+
+	// Play sound
+
+	try
+	{
+		CThunderSoundInstance* pSoundInstance = pSound->Play(bLoop);
+
+		pSoundInstance->SetVolume(bSpeach ? pGame->m_fSpeechVolume : pGame->m_fEffectsVolume);
+
+		if(bSpeach)
+			pSoundInstance->SetFlag(H2D_SOUNDINST_SPEECH);
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		PrintLastError(rEngine);
+
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_playmusic(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	CHitman2DGame* pGame = dynamic_cast<CHitman2DGame*>(rEngine.GetGameInstance());
+	if(NULL == pGame) return FALSE;
+
+	if(rEngine.GetOption(THU_OPTION_DISABLEMUSIC) == TRUE)
+		return TRUE;
+
+	if(rParams.empty() == true)
+	{
+		rEngine.Print(L"invalid syntax: string musicpath, bool loop expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_STRING)
+	{
+		rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	// Find music
+
+	LPCWSTR pszPath = rParams[0].GetStringValue();
+
+	WCHAR szSpecialPath[MAX_PATH] = {0};
+
+	if((PathFindFileName(pszPath) == pszPath) && PathFileExists(pszPath) == FALSE)
+	{
+		// If only file name specified, and file does not exist in current directory, search base\music
+		
+		wcscpy_s(szSpecialPath, MAX_PATH, rEngine.GetBaseDirectory());
+		PathAppend(szSpecialPath, L"music");
+		PathAppend(szSpecialPath, pszPath);
+		
+		LPWSTR pszExt = PathFindExtension(szSpecialPath);
+		if(NULL == *pszExt || wcscmp(pszExt, L".mp3")) wcscpy_s(pszExt, 5, L".mp3");
+
+		pszPath = szSpecialPath;
+	}
+
+	try
+	{
+		// Load music
+
+		CThunderMusic* pMusic = rEngine.GetMusic().Load(pszPath);
+
+		bool bLoop = false;
+
+		if(rParams.size() > 1)
+		{
+			if(rParams[1].GetVarType() != THU_VAR_INT || rParams[1].GetVarType() != THU_VAR_BOOL)
+			{
+				rEngine.Print(L"invalid param type (2): expected int or bool.", THU_PRINT_ERROR);
+				return FALSE;
+			}
+
+			bLoop = rParams[1].GetBoolValue();
+		}
+
+		pMusic->SetVolume(pGame->m_fMusicVolume);
+
+		// Play music
+
+		pMusic->Play(bLoop);
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		PrintLastError(rEngine);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_playvideo(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		rEngine.Print(L"invalid syntax: string videopath expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_STRING)
+	{
+		rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	bool bAsync = true;
+
+	if(rParams.size() > 1)
+	{
+		if(rParams[1].GetVarType() != THU_VAR_BOOL && rParams[1].GetVarType() != THU_VAR_INT)
+		{
+			rEngine.Print(L"invalid param type (2): expected int or bool.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		bAsync = rParams[1].GetBoolValue();
+	}
+
+	// Find video
+
+	LPCWSTR pszPath = rParams[0].GetStringValue();
+
+	WCHAR szSpecialPath[MAX_PATH] = {0};
+
+	if((PathFindFileName(pszPath) == pszPath) && PathFileExists(pszPath) == FALSE)
+	{
+		// If only file name specified, and file does not exist in current directory, search base\videos
+
+		wcscpy_s(szSpecialPath, MAX_PATH, rEngine.GetBaseDirectory());
+		PathAppend(szSpecialPath, L"videos");
+		PathAppend(szSpecialPath, pszPath);
+
+		LPWSTR pszExt = PathFindExtension(szSpecialPath);
+		if(NULL == *pszExt || wcscmp(pszExt, L".mpg")) wcscpy_s(pszExt, 5, L".mpg");
+
+		pszPath = szSpecialPath;
+	}
+
+	try
+	{
+		// Load video
+
+		CThunderVideo* pVideo = rEngine.GetVideos().Load(pszPath);
+
+		// Set volume
+
+		CHitman2DGame* pGame = dynamic_cast<CHitman2DGame*>(rEngine.GetGameInstance());
+		if(pGame) pVideo->SetVolume(pGame->m_fEffectsVolume);
+
+		// Play video
+
+		pVideo->Play();
+
+		// If not playing asynchronously, wait until it stops
+
+		if(false == bAsync)
+		{
+			while(rEngine.GetCurrentVideo() && pGame->IsRunning())
+			{
+				pGame->DoEvents();
+			}
+		}
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		PrintLastError(rEngine);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_stopsound(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	int nStopped = 0;
+
+	if(rParams.empty() == true)
+	{
+		// Stop all sounds
+		
+		nStopped = rEngine.GetSoundInstances().GetCount();
+
+		rEngine.GetSoundInstances().RemoveAll();
+	}
+	else
+	{
+		// Stop sounds matching a specific pattern
+
+		if(rParams[0].GetVarType() != THU_VAR_STRING)
+		{
+			rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		for(list<CThunderSoundInstance*>::iterator pos = rEngine.GetSoundInstances().GetFirstPos();
+			pos != rEngine.GetSoundInstances().GetLastPos();
+			pos++)
+		{
+			if(NULL == *pos) continue;
+
+			if(wcsstr((*pos)->GetSound().GetName(), rParams[0].GetStringValue()))
+			{
+				rEngine.GetSoundInstances().Remove(pos);
+				nStopped++;
+			}
+		}
+	}
+
+	if(nStopped > 0)
+	{
+		if(nStopped == 1)
+		{
+			rEngine.Print(L"stopped 1 sound.", THU_PRINT_MESSAGE);
+		}
+		else
+		{
+			CThunderString str;
+			str.Format(L"stopped %d sounds.", THU_PRINT_MESSAGE);
+
+			rEngine.Print(str, THU_PRINT_MESSAGE);
+		}
+	}
+	else
+	{
+		rEngine.Print(L"no sounds stopped.", THU_PRINT_MESSAGE);
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_stopmusic(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	int nStopped = 0;
+
+	if(rParams.empty() == true)
+	{
+		// Stop all music
+
+		for(map<CThunderString, CThunderMusic*>::iterator pos = rEngine.GetMusic().GetFirstPos();
+			pos != rEngine.GetMusic().GetLastPos();
+			pos++)
+		{
+			if(pos->second->IsFlagSet(THU_MUSIC_PLAYING) == true)
+			{
+				nStopped++;
+
+				pos->second->Stop();
+			}
+		}
+	}
+	else
+	{
+		// Stop music matching a specific pattern
+
+		if(rParams[0].GetVarType() != THU_VAR_STRING)
+		{
+			rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		for(map<CThunderString, CThunderMusic*>::iterator pos = rEngine.GetMusic().GetFirstPos();
+			pos != rEngine.GetMusic().GetLastPos();
+			pos++)
+		{
+			if(pos->second->IsFlagSet(THU_MUSIC_PLAYING) == true &&
+			   pos->first.Find(rParams[0].GetStringValue()))
+			{
+				nStopped++;
+
+				pos->second->Stop();
+			}
+		}
+	}
+
+	if(nStopped > 0)
+	{
+		if(nStopped == 1)
+		{
+			rEngine.Print(L"stopped 1 music resource.", THU_PRINT_MESSAGE);
+		}
+		else
+		{
+			CThunderString str;
+			str.Format(L"stopped %d music resources.", THU_PRINT_MESSAGE);
+
+			rEngine.Print(str, THU_PRINT_MESSAGE);
+		}
+	}
+	else
+	{
+		rEngine.Print(L"no music resources stopped.", THU_PRINT_MESSAGE);
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_stopvideo(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	try
+	{
+		// Only one video can be playing at the same time, so stop current video if any
+
+		if(rEngine.GetCurrentVideo() != NULL)
+			rEngine.GetCurrentVideo()->Stop();
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		PrintLastError(rEngine);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_break(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	__asm { int 3 };
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_crash(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	int* pnInvalid = NULL;
+
+	return *pnInvalid;
+}
+
+int CHitman2DGame::cmd_openconsole(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	CHitman2DGame* pGame = dynamic_cast<CHitman2DGame*>(rEngine.GetGameInstance());
+
+	if(NULL == pGame || NULL == pGame->GetConsole())
+		return FALSE;
+
+	bool bFullOpen = false;
+
+	if(rParams.size() > 0)
+	{
+		if(rParams[0].GetVarType() != THU_VAR_BOOL)
+		{
+			rEngine.Print(L"invalid param type (1): expected bool.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		bFullOpen = rParams[0].GetBoolValue();
+	}
+
+	if(rEngine.GetScreens().GetActiveScreen() != pGame->GetConsole())
+		pGame->GetConsole()->Toggle(bFullOpen);
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_print(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		rEngine.Print();
+	}
+	else
+	{
+		if(rParams[0].GetVarType() != THU_VAR_STRING)
+		{
+			rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		THU_PRINT_TYPES nType = THU_PRINT_MESSAGE;
+
+		if(rParams.size() > 1)
+		{
+			if(rParams[1].GetVarType() != THU_VAR_ENUM)
+			{
+				rEngine.Print(L"invalid param type (2) expected enum.", THU_PRINT_ERROR);
+				return FALSE;
+			}
+
+			nType = (THU_PRINT_TYPES)rParams[1].GetEnumValue(H2D_SZ_PRINTTYPES, H2D_N_PRINTTYPES, sizeof(H2D_N_PRINTTYPES) / sizeof(int), THU_PRINT_MESSAGE);
+		}
+
+		rEngine.Print(rParams[0].GetStringValue(), nType);
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_vartype(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		rEngine.Print(L"invalid syntax: enum varname expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_ENUM)
+	{
+		rEngine.Print(L"invalid param type (1): expected enum.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	LPCWSTR pszVarName = rParams[0].GetStringValue();
+
+	CThunderVariable* pVar = rEngine.GetVariables().Find(pszVarName);
+
+	if(NULL == pVar)
+	{
+		// If not found in engine variables, check current map
+
+		if(rEngine.GetCurrentMapConst() == NULL)
+		{
+			rEngine.Print(L"variable not found, current map not searched.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		pVar = rEngine.GetCurrentMap()->GetVariables().Find(pszVarName);
+
+		if(NULL == pVar)
+		{
+			rEngine.Print(L"variable not found, current map searched.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+	}
+
+	rEngine.Print(pVar->GetVarTypeString(), THU_PRINT_MESSAGE);
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_mapvar(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rEngine.GetCurrentMapConst() == NULL)
+	{
+		rEngine.Print(L"no current map.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams.empty() == true)
+	{
+		rEngine.Print(L"invalid syntax: enum varname {...} expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_ENUM)
+	{
+		rEngine.Print(L"invalid param type (1): expected enum.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	LPCWSTR pszVarName = rParams[0].GetStringValue();
+
+	CThunderVariable* pVar = rEngine.GetCurrentMap()->GetVariables().Find(pszVarName);
+
+	if(rParams.size() > 1)
+	{
+		// Set map variable
+
+		if(NULL == pVar) pVar = rEngine.GetCurrentMap()->GetVariables().Add(pszVarName, THU_VAR_UNDEFINED);
+
+		*pVar = rParams[1];
+	}
+	else
+	{
+		// Get map variable
+
+		if(NULL == pVar)
+		{
+			rEngine.Print(L"map variable not found.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		CThunderString str;
+		pVar->ToString(str);
+
+		rEngine.Print(str);
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_echo(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		// Get
+
+		CThunderVariable var;
+		CThunderString str;
+
+		var.SetBoolValue(rEngine.GetOption(THU_OPTION_ENABLEECHO) == TRUE);
+
+		var.ToString(str);
+
+		rEngine.Print(str, THU_PRINT_MESSAGE);
+	}
+	else
+	{
+		// Set
+
+		if(rParams[0].GetVarType() != THU_VAR_INT && rParams[0].GetVarType() != THU_VAR_BOOL)
+		{
+			rEngine.Print(L"invalid param type (1): int or bool expected.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		rEngine.SetOption(THU_OPTION_ENABLEECHO, rParams[0].GetBoolValue());
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_makeregion(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.size() != 2)
+	{
+		rEngine.Print(L"invalid syntax: string srcrespath, string destrespath expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_STRING)
+	{
+		rEngine.Print(L"invalid param type (1): string expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[1].GetVarType() != THU_VAR_STRING)
+	{
+		rEngine.Print(L"invalid param type (2): string expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	CThunderRegionSet* pRegionSet = NULL;
+
+	try
+	{
+		// Detect resource type based on file extension
+
+		THU_RESOURCE_TYPES nResType = DetectResourceType(rParams[0].GetStringValue());
+
+		// Create a region set
+
+		pRegionSet = rEngine.GetRegionSets().Create();
+	
+		switch(nResType)
+		{
+		case THU_RESOURCE_SPRITE:
+			{
+				// Load the specified sprite
+
+				CThunderSprite* pSprite = rEngine.GetSprites().Load(rParams[0].GetStringValue());
+	
+				// Create a region set from sprite	
+
+				pRegionSet->FromSprite(*pSprite);
+			}
+			break;
+		case THU_RESOURCE_ANIMATION:
+			{
+				// Get the specified animation
+
+				CThunderAnimation* pAnim = rEngine.GetAnimations().Load(rParams[0].GetStringValue());
+
+				// Create region set from animation
+
+				pRegionSet->FromAnimation(*pAnim);
+			}
+			break;
+		case THU_RESOURCE_TEXTURESHEET:
+			{
+				// Get the specified texture sheet
+
+				CThunderTextureSheet* pTexSheet = rEngine.GetTextureSheets().Load(rParams[0].GetStringValue());
+
+				// Create region set from texture sheet
+
+				pRegionSet->FromTextureSheet(*pTexSheet);
+			}
+			break;
+		}
+
+		// Save it to destination file
+
+		pRegionSet->Serialize(rParams[1].GetStringValue());
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		delete pRegionSet;
+
+		rEngine.Print(L"resource not found.", THU_PRINT_ERROR);
+
+		PrintLastError(rEngine);
+
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_regiontotexture(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.size() != 3)
+	{
+		rEngine.Print(L"invalid syntax: string regionsetpath, int regionid, string destpath expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_STRING)
+	{
+		rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[1].GetVarType() != THU_VAR_INT)
+	{
+		rEngine.Print(L"invalid param type (2): expected int.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[2].GetVarType() != THU_VAR_STRING)
+	{
+		rEngine.Print(L"invalid param type (3): expected string.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	CThunderRegionSet* pRgnSet = rEngine.GetRegionSets().Load(rParams[0].GetStringValue());
+
+	if(NULL == pRgnSet)
+	{
+		rEngine.Print(L"failed to find or load region set.", THU_PRINT_ERROR);
+
+		PrintLastError(rEngine);
+
+		return FALSE;
+	}
+
+	CThunderRegion* pRgn = pRgnSet->GetRegion(rParams[2].GetIntValue());
+	
+	if(NULL == pRgn)
+	{
+		rEngine.Print(L"could not get region with a specified id.", THU_PRINT_ERROR);
+
+		PrintLastError(rEngine);
+
+		return FALSE;
+	}
+
+	const SIZE& rRegionSize = pRgn->GetSize();
+
+	// Create dynamic texture in system memory
+
+	LPDIRECT3DTEXTURE9 pTex = NULL;
+
+	D3DXCreateTexture(rEngine.GetGraphics().GetDevice(), rRegionSize.cx, rRegionSize.cy, 1, D3DUSAGE_DYNAMIC, D3DFMT_X8R8G8B8, D3DPOOL_SYSTEMMEM, &pTex);
+
+	if(NULL == pTex)
+	{
+		rEngine.Print(L"failed to create texture for a region.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	// Get its surface
+
+	LPDIRECT3DSURFACE9 pSurf = NULL;
+
+	pTex->GetSurfaceLevel(0, &pSurf);
+
+	if(NULL == pSurf)
+	{
+		rEngine.Print(L"failed to get new texture surface level.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	// Get surface's DC
+
+	HDC hDC = NULL;
+	pSurf->GetDC(&hDC);
+
+	if(NULL == hDC)
+	{
+		pSurf->Release();
+		pTex->Release();
+
+		rEngine.Print(L"failed to get surface dc.", THU_PRINT_ERROR);
+
+		return FALSE;
+	}
+
+	// Clear DC with black color
+
+	RECT rcClear;
+	FillRect(hDC, &rcClear, (HBRUSH)GetStockObject(BLACK_BRUSH));
+
+	// Set opaque pixels on DC to white
+
+	const BYTE** pbRgnData = pRgn->GetData2DConst();
+
+	for(int y = 0; y < rRegionSize.cy; y++)
+	{
+		for(int x = 0; x < rRegionSize.cx; x++)
+		{
+			if(pbRgnData[y][x]) SetPixel(hDC, x, y, 0xFFFFFFFF);
+		}
+	}
+
+	// Cleanup
+
+	pSurf->ReleaseDC(hDC);
+	pSurf->Release();
+
+	// Save texture to file
+
+	D3DXIMAGE_FILEFORMAT nFormat = ImageFormatFromExtension(PathFindExtension(rParams[2].GetStringValue()));
+
+	if(FAILED(D3DXSaveTextureToFile(rParams[2].GetStringValue(), D3DXIFF_PNG, pTex, NULL)))
+	{
+		pSurf->ReleaseDC(hDC);
+		pSurf->Release();
+		pTex->Release();
+
+		rEngine.Print(L"failed to save texture.", THU_PRINT_ERROR);
+
+		return FALSE;
+	}
+
+	pTex->Release();
+
+	rEngine.Print(L"texture saved successfully.", THU_PRINT_MESSAGE);
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_verifyunicode(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		rEngine.Print(L"invalid syntax: string dirname expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_STRING)
+	{
+		rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	// Convert all files in specified directory with specified filter to unicode
+
+	LPCWSTR pszFilter = L"*";
+
+	if(rParams.size() > 1)
+	{
+		if(rParams[1].GetVarType() != THU_VAR_STRING)
+		{
+			rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		pszFilter = rParams[1].GetStringValue();
+	}
+
+	WCHAR szSearch[MAX_PATH] = {0};
+	wcscpy_s(szSearch, MAX_PATH, rParams[0].GetStringValue());
+
+	LPWSTR pszTitleStart = PathAddBackslash(szSearch);
+
+	wcscpy_s(pszTitleStart,
+			 sizeof(szSearch) / sizeof(WCHAR) - (pszTitleStart - szSearch),
+			 pszFilter);
+
+	WIN32_FIND_DATA wfd = {0};
+
+	HANDLE hFind = FindFirstFile(szSearch, &wfd);
+
+	if(hFind == INVALID_HANDLE_VALUE)
+	{
+		rEngine.Print(L"no files found.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	rEngine.Print(L"\nBEGIN FILES PROCESSED", THU_PRINT_MESSAGE);
+
+	CThunderStream stream;
+
+	try
+	{
+		do
+		{
+			if(wfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+
+			// Get this file's full path
+
+			wcscpy_s(pszTitleStart,
+					 sizeof(szSearch) / sizeof(WCHAR) - (pszTitleStart - szSearch),
+					 wfd.cFileName);
+
+			// Process this file
+
+			stream.Open(szSearch, GENERIC_READ, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN);
+
+			LPSTR pszBuffer = (LPSTR)stream.CreateReadBuffer();
+
+			if(0xFEFF == *(WORD*)pszBuffer)
+			{
+				// Already unicode
+
+				rEngine.Print(wfd.cFileName, THU_PRINT_MESSAGE);
+			}
+			else
+			{
+				// Check the first 16 bytes for a non-ascii character
+
+				int nLen = int(stream.GetSize());
+
+				int nLenCheck = nLen > 16 ? 16 : nLen;
+
+				bool bBinaryFile = false;
+
+				for(int n = 0; n < nLenCheck; n++)
+				{
+					if(pszBuffer[n] < 0x20)
+					{
+						bBinaryFile = true;
+
+						break;
+					}
+				}
+
+				// Convert to unicode
+
+				if(bBinaryFile)
+				{
+					// This is a binary file!
+
+					rEngine.Print(wfd.cFileName, THU_PRINT_WARNING);
+				}
+				else
+				{
+					// Allocate buffer for file data, including unicode signature and nullchar
+
+					CThunderString strBuffer;
+					strBuffer.Allocate(nLen + 1);
+
+					// First char is unicode signature
+
+					strBuffer[0] = 0xFEFF;
+
+					// Convert from ASCII to unicode
+
+					mbstowcs_s(NULL, strBuffer.GetBuffer() + 1, nLen + 1, pszBuffer, nLen);
+
+					stream.Empty();
+
+					stream.Open(szSearch, GENERIC_WRITE, CREATE_ALWAYS);
+
+					// Write unicode data to file
+
+					stream.Write((LPCVOID)strBuffer.GetBufferConst(), DWORD((nLen + 1) * sizeof(WCHAR)));
+
+					rEngine.Print(wfd.cFileName, THU_PRINT_INFO);
+				}
+			}
+		} while(FindNextFile(hFind, &wfd));
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		FindClose(hFind);
+
+		rEngine.Print(wfd.cFileName, THU_PRINT_ERROR);
+
+		return FALSE;
+	}
+
+	FindClose(hFind);
+
+	rEngine.Print(L"END FILES PROCESSED", THU_PRINT_MESSAGE);
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_load(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		rEngine.Print(L"invalid syntax: string respath expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_STRING)
+	{
+		rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(wcscmp(PathFindExtension(rParams[0].GetStringValue()), L".thm") == 0)
+	{
+		// Check if this is a map, in which case, do special processing to load the map
+		// (because map is not in one of resource maps)
+
+		bool bCheckExists = false;
+
+		// When loading map, second parameter is boolean specifying whether to check if map exists
+
+		if(rParams.size() == 2 && rParams[1].GetVarType() == THU_VAR_BOOL && rParams[1].GetBoolValue())
+			bCheckExists = true;
+
+		if(NULL == rEngine.GetMaps().Load(rParams[0].GetStringValue(), false, bCheckExists, false))
+		{
+			PrintLastError(rEngine);
+			return FALSE;
+		}
+
+		return TRUE;
+	}
+
+	// Detect resource type from extension
+
+	THU_RESOURCE_TYPES nResType = DetectResourceType(rParams[0].GetStringValue(), false, &rEngine.GetErrors());
+
+	// If could not be detected, try to detect resource type from contents
+
+	if(nResType == THU_RESOURCE_ANY) nResType = DetectResourceType(rParams[0].GetStringValue(), true, &rEngine.GetErrors());
+
+	// If still could no be detected, it's hopeless.
+
+	if(nResType == THU_RESOURCE_ANY)
+	{
+		rEngine.Print(L"failed to detect resource type.", THU_PRINT_ERROR);
+		PrintLastError(rEngine);
+		return FALSE;
+	}
+
+	// Load the resource
+
+	CThunderObject* pRes = NULL;
+
+	switch(nResType)
+	{
+	case THU_RESOURCE_TEXTURE:
+		pRes = rEngine.GetTextures().Load(rParams[0].GetStringValue());
+		break;
+	case THU_RESOURCE_TEXTURESHEET:
+		pRes = rEngine.GetTextureSheets().Load(rParams[0].GetStringValue());
+		break;
+	case THU_RESOURCE_TEXTUREFONT:
+		pRes = rEngine.GetTextureFonts().Load(rParams[0].GetStringValue());
+		break;
+	case THU_RESOURCE_ANIMATION:
+		pRes = rEngine.GetAnimations().Load(rParams[0].GetStringValue());
+		break;
+	case THU_RESOURCE_SPRITE:
+		pRes = rEngine.GetSprites().Load(rParams[0].GetStringValue());
+		break;
+	case THU_RESOURCE_REGIONSET:
+		pRes = rEngine.GetRegionSets().Load(rParams[0].GetStringValue());
+		break;
+	case THU_RESOURCE_STRINGTABLE:
+		pRes = rEngine.GetStringTables().Load(rParams[0].GetStringValue());
+		break;
+	case THU_RESOURCE_SOUND:
+		pRes = rEngine.GetSounds().Load(rParams[0].GetStringValue());
+		break;
+	case THU_RESOURCE_MUSIC:
+		pRes = rEngine.GetMusic().Load(rParams[0].GetStringValue());
+		break;
+	}
+
+	if(pRes)
+	{
+		rEngine.Print(L"resource loaded successfully.", THU_PRINT_MESSAGE);
+	}
+	else
+	{
+		PrintLastError(rEngine);
+
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_unload(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		// If no parameters specified, unload current map
+
+		if(rEngine.GetCurrentMapConst())
+		{
+			rEngine.GetMaps().Remove(rEngine.GetCurrentMap());
+			return TRUE;
+		}
+		else
+		{
+			rEngine.Print(L"no current map.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+	}
+	else if(rParams.size() != 2)
+	{
+		rEngine.Print(L"invalid syntax: enum restypes {...} restype, string pathortitle expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_ENUM)
+	{
+		rEngine.Print(L"invalid param type (3): expected enum restypes.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[1].GetVarType() != THU_VAR_STRING)
+	{
+		rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+		return FALSE;
+	}	
+
+	LPCWSTR pszType = rParams[0].GetStringValue();
+	LPCWSTR pszSearch = rParams[1].GetStringValue();
+
+	// If only file title specified, do pattern search
+
+	bool bSearchPattern = (PathFindFileName(pszSearch) == pszSearch);
+
+	CThunderResource* pResource = NULL;
+	bool bRet = false;
+
+	if(wcscmp(pszType, L"texture") == 0)
+	{
+		// Find texture
+
+		pResource = bSearchPattern ?
+					rEngine.GetTextures().FindPattern(pszSearch) :
+					rEngine.GetTextures().Find(pszSearch);
+	}
+	else if(wcscmp(pszType, L"texturesheet") == 0)
+	{
+		// Reload texture sheet
+
+		pResource = bSearchPattern ?
+					rEngine.GetTextureSheets().FindPattern(pszSearch) :
+					rEngine.GetTextureSheets().Find(pszSearch);
+	}
+	else if(wcscmp(pszType, L"texturefont") == 0)
+	{
+		// Reload texture font
+
+		pResource = bSearchPattern ?
+					rEngine.GetTextureFonts().FindPattern(pszSearch) :
+					rEngine.GetTextureFonts().Find(pszSearch);
+	}
+	else if(wcscmp(pszType, L"animation") == 0)
+	{
+		// Reload animation
+
+		pResource = bSearchPattern ?
+					rEngine.GetAnimations().FindPattern(pszSearch) :
+					rEngine.GetAnimations().Find(pszSearch);
+	}
+	else if(wcscmp(pszType, L"sprite") == 0)
+	{
+		// Reload sprite
+
+		pResource = bSearchPattern ?
+					rEngine.GetSprites().FindPattern(pszSearch) :
+					rEngine.GetSprites().Find(pszSearch);
+	}
+	else if(wcscmp(pszType, L"regionset") == 0)
+	{
+		// Reload region set
+
+		pResource = bSearchPattern ?
+					rEngine.GetRegionSets().FindPattern(pszSearch) :
+					rEngine.GetRegionSets().Find(pszSearch);
+	}
+	else if(wcscmp(pszType, L"stringtable") == 0)
+	{
+		pResource = bSearchPattern ?
+					rEngine.GetStringTables().FindPattern(pszSearch) :
+					rEngine.GetStringTables().Find(pszSearch);
+	}
+	else if(wcscmp(pszType, L"sound") == 0)
+	{
+		// Reload sound
+
+		pResource = bSearchPattern ?
+					rEngine.GetSounds().FindPattern(pszSearch) :
+					rEngine.GetSounds().Find(pszSearch);
+	}
+	else if(wcscmp(pszType, L"music") == 0)
+	{
+		// Reload music
+
+		pResource = bSearchPattern ?
+					rEngine.GetMusic().FindPattern(pszSearch) :
+					rEngine.GetMusic().Find(pszSearch);
+	}
+	else if(wcscmp(pszType, L"map") == 0)
+	{
+		// Reload map (not a resource)
+
+		CThunderMap* pMap = bSearchPattern ? rEngine.GetMaps().FindPattern(pszSearch) : rEngine.GetMaps().Find(pszSearch);
+
+		if(NULL == pMap)
+		{
+			rEngine.Print(L"failed to reload map: not found in map list.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		rEngine.GetMaps().Remove(pMap);
+
+		return TRUE;
+	}
+
+	if(NULL == pResource)
+	{
+		rEngine.Print(L"failed to find resource.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	pResource->Remove();
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_reload(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		// If no parameters specified, reload current map
+
+		if(rEngine.GetCurrentMapConst() &&
+		   !rEngine.GetMaps().Load(rEngine.GetCurrentMapConst()->GetName(), false, true, true))
+		{
+			PrintLastError(rEngine);
+			return FALSE;
+		}
+
+		return TRUE;
+	}
+	else if(rParams.size() != 2)
+	{
+		rEngine.Print(L"invalid syntax: enum restypes {...} restype, string pathortitle expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_ENUM)
+	{
+		rEngine.Print(L"invalid param type (3): expected enum restypes.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[1].GetVarType() != THU_VAR_STRING)
+	{
+		rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+		return FALSE;
+	}	
+	
+	LPCWSTR pszType = rParams[0].GetStringValue();
+	LPCWSTR pszSearch = rParams[1].GetStringValue();
+
+	// If only file title specified, do pattern search
+
+	bool bSearchPattern = (PathFindFileName(pszSearch) == pszSearch);
+
+	CThunderResource* pResource = NULL;
+	bool bRet = false;
+
+	if(wcscmp(pszType, L"texture") == 0)
+	{
+		// Find texture
+
+		pResource = bSearchPattern ?
+					rEngine.GetTextures().FindPattern(pszSearch) :
+					rEngine.GetTextures().Find(pszSearch);
+	}
+	else if(wcscmp(pszType, L"texturesheet") == 0)
+	{
+		// Reload texture sheet
+
+		pResource = bSearchPattern ?
+					rEngine.GetTextureSheets().FindPattern(pszSearch) :
+					rEngine.GetTextureSheets().Find(pszSearch);
+	}
+	else if(wcscmp(pszType, L"texturefont") == 0)
+	{
+		// Reload texture font
+
+		pResource = bSearchPattern ?
+					rEngine.GetTextureFonts().FindPattern(pszSearch) :
+					rEngine.GetTextureFonts().Find(pszSearch);
+	}
+	else if(wcscmp(pszType, L"animation") == 0)
+	{
+		// Reload animation
+
+		pResource = bSearchPattern ?
+					rEngine.GetAnimations().FindPattern(pszSearch) :
+					rEngine.GetAnimations().Find(pszSearch);
+	}
+	else if(wcscmp(pszType, L"sprite") == 0)
+	{
+		// Reload sprite
+
+		pResource = bSearchPattern ?
+					rEngine.GetSprites().FindPattern(pszSearch) :
+					rEngine.GetSprites().Find(pszSearch);
+	}
+	else if(wcscmp(pszType, L"regionset") == 0)
+	{
+		// Reload region set
+
+		pResource = bSearchPattern ?
+					rEngine.GetRegionSets().FindPattern(pszSearch) :
+					rEngine.GetRegionSets().Find(pszSearch);
+	}
+	else if(wcscmp(pszType, L"stringtable") == 0)
+	{
+		pResource = bSearchPattern ?
+					rEngine.GetStringTables().FindPattern(pszSearch) :
+					rEngine.GetStringTables().Find(pszSearch);
+	}
+	else if(wcscmp(pszType, L"sound") == 0)
+	{
+		// Reload sound
+
+		pResource = bSearchPattern ?
+					rEngine.GetSounds().FindPattern(pszSearch) :
+					rEngine.GetSounds().Find(pszSearch);
+	}
+	else if(wcscmp(pszType, L"music") == 0)
+	{
+		// Reload music
+
+		pResource = bSearchPattern ?
+					rEngine.GetMusic().FindPattern(pszSearch) :
+					rEngine.GetMusic().Find(pszSearch);
+	}
+	else if(wcscmp(pszType, L"map") == 0)
+	{
+		// Reload map (not a resource)
+
+		CThunderMap* pMap = bSearchPattern ? rEngine.GetMaps().FindPattern(pszSearch) : rEngine.GetMaps().Find(pszSearch);
+
+		if(NULL == pMap)
+		{
+			rEngine.Print(L"failed to reload map: not found in map list.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		if(rEngine.GetMaps().Load(pMap->GetName(), false, true, true) == NULL)
+		{
+			PrintLastError(rEngine);
+			return FALSE;
+		}
+
+		return TRUE;
+	}
+
+	if(NULL == pResource)
+	{
+		rEngine.Print(L"failed to find resource.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	CThunderString strPath = pResource->GetName();
+
+	try
+	{
+		pResource->Deserialize(strPath);
+
+		rEngine.Print(L"resource reloaded successfully.", THU_PRINT_MESSAGE);
+	}
+	
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		PrintLastError(rEngine);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_test(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	CHitman2DMap* pMap = dynamic_cast<CHitman2DMap*>(rEngine.GetMaps().Add(L"test"));
+
+	if(NULL == pMap)
+	{
+		rEngine.Print(L"Failed to load a test map", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	pMap->SetName(L"demo");
+
+	rEngine.SetOption(THU_OPTION_TILESIZE, 32);
+
+	CThunderString strPath = rEngine.GetBaseDirectory();
+	strPath += L"\\texturesheets\\maps\\shared.thx";
+
+	int nTilesTex = pMap->AddTextureSheet(rEngine.GetTextureSheets().Load(strPath));
+
+	pMap->SetSize(32, 32);
+
+	for(int n = 0; n < 32; n++)
+	{
+		for(int j = 0; j < 32; j++)
+		{
+			pMap->GetTile(n, j).SetTextureInstance(*pMap, nTilesTex, 0);
+		}
+	}
+
+	pMap->GetTile(7, 8).SetTextureInstance(*pMap, nTilesTex, 1);
+	pMap->GetTile(7, 8).SetFlag(THU_TILE_COLLISION);
+
+	pMap->GetTile(8, 9).SetTextureInstance(*pMap, nTilesTex, 1);
+	pMap->GetTile(8, 9).SetFlag(THU_TILE_COLLISION);
+
+	pMap->GetTile(9, 9).SetTextureInstance(*pMap, nTilesTex, 1);
+	pMap->GetTile(9, 9).SetFlag(THU_TILE_COLLISION);
+
+	CThunderActor* pBox = pMap->CreateActor(L"player", L"box");
+
+	strPath = rEngine.GetBaseDirectory();
+	strPath += L"\\sprites\\player.ths";
+
+	pBox->SetSprite(rEngine.GetSprites().Load(strPath));
+
+	pBox->PlayAnimation(0, THU_ANIMATIONDATA_STOP);
+
+	pBox->SetPosition(0.0f, 2.0f, 0.0f);
+	pBox->SetFlags(THU_ACTOR_UPDATE | THU_ACTOR_COLLISION);
+	pMap->AddActor(pBox);
+
+	pMap->SetPlayerActor(pBox);
+
+	CThunderActor* pObstacle = pMap->CreateActor(L"prop", L"obstacle");
+
+	strPath = rEngine.GetBaseDirectory();
+	strPath += L"\\sprites\\obstacle.ths";
+
+	pObstacle->SetSprite(rEngine.GetSprites().Load(strPath));
+
+	pObstacle->PlayAnimation(0, THU_ANIMATIONDATA_STOP);
+
+	pObstacle->SetPosition(5.0f, 2.0f, 0.0f);
+	pObstacle->SetFlags(THU_ACTOR_COLLISION);
+	pMap->AddActor(pObstacle);
+
+	// Create a hardcoded shadowmap
+
+	pMap->SetShadowmapTileSize(512);
+
+	WCHAR szShadowmapTileName[MAX_PATH] = {0};
+	wcscpy_s(szShadowmapTileName, MAX_PATH, rEngine.GetBaseDirectory());
+	PathAddBackslash(szShadowmapTileName);
+	wcscat_s(szShadowmapTileName, MAX_PATH, L"textures\\maps\\");
+
+	WCHAR szTitle[256] = {0};
+	wcscpy_s(szTitle, 256, PathFindFileName(pMap->GetName()));
+	PathRemoveExtension(szTitle);
+
+	wcscat_s(szShadowmapTileName, MAX_PATH, szTitle);
+	wcscat_s(szShadowmapTileName, MAX_PATH, L"\\shadowmap");
+
+	LPWSTR pszTitleEnd = szShadowmapTileName + wcslen(szShadowmapTileName);
+	int nSize = MAX_PATH - (pszTitleEnd - szShadowmapTileName);
+
+	WCHAR szTemp[8] = {0};
+
+	int nShadowmapTiles = pMap->GetShadowmapTileCount();
+
+	while(nShadowmapTiles--)
+	{
+		_itow_s(nShadowmapTiles, szTemp, 8, 10);
+
+		int nDigits = wcslen(szTemp);
+
+		for(int j = 0; j < (4 - nDigits); j++)
+			pszTitleEnd[j] = L'0';
+
+		pszTitleEnd[4 - nDigits] = L'\0';
+
+		wcscat_s(pszTitleEnd, nSize, szTemp);
+		wcscat_s(pszTitleEnd, nSize, L".png");
+
+		CThunderTexture* pTexShadowmapTile = rEngine.GetTextures().Load(szShadowmapTileName);
+
+		pMap->SetShadowmapTile(nShadowmapTiles, pTexShadowmapTile);
+	}
+
+	// Set camera position and size
+
+	float fCameraWidth = float(rEngine.GetGraphics().GetDeviceParams().BackBufferWidth) / 32.0f;
+	float fCameraHeight = float(rEngine.GetGraphics().GetDeviceParams().BackBufferHeight) / 32.0f;
+
+	pMap->SetCamera(0.0f, 0.0f, fCameraWidth, fCameraHeight);
+
+	pMap->SetFlag(THU_MAP_RENDER_CLIP);
+
+	rEngine.SetCurrentMap(pMap);
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_errorexit(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		rEngine.Print(L"invalid syntax: string errormessage expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_STRING)
+	{
+		rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	rEngine.GetErrors().Push(new CHitman2DErrorCustom(__FUNCTIONW__, rParams[0].GetStringValue()));
+
+	if(IsWindowVisible(rEngine.GetGameWindow()) == TRUE)
+		ShowWindow(rEngine.GetGameWindow(), SW_HIDE);
+
+	CHitman2DGame* pGame = dynamic_cast<CHitman2DGame*>(rEngine.GetGameInstance());
+
+	CHitman2DDialogError dialogError;
+
+	dialogError.Show(GetDesktopWindow(), rParams[0].GetStringValue());
+
+	if(pGame != NULL) pGame->Exit();
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_lasterror(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		PrintLastError(rEngine);
+	}
+	else
+	{
+		if(rParams[0].GetVarType() != THU_VAR_ENUM)
+		{
+			rEngine.Print(L"invalid param type (1): expected enum { clear }.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		if(wcscmp(rParams[0].GetStringValue(), L"clear") == 0)
+		{
+			rEngine.GetErrors().Empty();
+		}
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_benchmark(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	CHitman2DGame* pGame = dynamic_cast<CHitman2DGame*>(rEngine.GetGameInstance());
+	if(NULL == pGame) return FALSE;
+
+	__int64	qwFreq = 0;
+
+	if(QueryPerformanceFrequency((LARGE_INTEGER*)&qwFreq) == FALSE) return FALSE;
+
+	if(rParams.empty() ||
+	  (rParams[0].GetVarType() == THU_VAR_ENUM &&
+	   wcscmp(rParams[0].GetStringValue(), L"start") == 0))
+	{
+		// Start benchmark		
+
+		if(QueryPerformanceCounter((LARGE_INTEGER*)&pGame->m_qwLastBench) == FALSE)
+			return FALSE;
+
+		rEngine.Print(L"benchmark started.", THU_PRINT_MESSAGE);
+	}
+	else
+	{
+		// End benchmark
+
+		__int64 qwCurTime;
+
+		if(QueryPerformanceCounter((LARGE_INTEGER*)&qwCurTime) == FALSE)
+			return FALSE;
+
+		__int64 qwDiff = qwCurTime - pGame->m_qwLastBench;
+
+		double dElapsed = double(qwDiff) / double(qwFreq);
+
+		CThunderString str;
+
+		str.Format(L"benchmark over, %f seconds (or %f milliseconds, or %f microseconds) passed.",
+				   dElapsed,
+				   dElapsed * 1000.0f,
+				   dElapsed * 1000000.0f);
+
+		rEngine.Print(str, THU_PRINT_MESSAGE);
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_dir(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		rParams.resize(1);
+
+		WCHAR szCurDir[MAX_PATH - 1] = {0};
+		GetCurrentDirectory(MAX_PATH, szCurDir);
+
+		rParams[0].SetStringValue(szCurDir);
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_STRING)
+	{
+		rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	// Print directory contents
+
+	LPCWSTR pszFilter = L"*";
+
+	if(rParams.size() > 1)
+	{
+		if(rParams[1].GetVarType() != THU_VAR_STRING)
+		{
+			rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		pszFilter = rParams[1].GetStringValue();
+	}
+
+	WCHAR szSearch[MAX_PATH] = {0};
+
+	wcscpy_s(szSearch, MAX_PATH, rParams[0].GetStringValue());		
+	PathAppend(szSearch, pszFilter);
+
+	WIN32_FIND_DATA wfd = {0};
+
+	HANDLE hFind = FindFirstFile(szSearch, &wfd);
+
+	if(INVALID_HANDLE_VALUE == hFind)
+	{
+		rEngine.Print(L"no files found.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	rEngine.Print(L"\nBEGIN DIRECTORY CONTENTS", THU_PRINT_INFO);
+
+	CThunderString strFound;
+
+	do
+	{
+		if(L'.' == wfd.cFileName[0])
+		{
+			if(L'\0' == wfd.cFileName[1]) continue;
+
+			if(L'.' == wfd.cFileName[1] && L'\0' == wfd.cFileName[2]) continue;
+		}
+		if(wfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+		{
+			strFound.Format(L"   [%s]", wfd.cFileName);
+		}
+		else
+		{
+			strFound.Format(L"   %s", wfd.cFileName);
+		}
+
+		rEngine.Print(strFound, THU_PRINT_INFO);
+
+	} while(FindNextFile(hFind, &wfd));
+
+	FindClose(hFind);
+
+	rEngine.Print(L"END DIRECTORY CONTENTS", THU_PRINT_INFO);
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_curdir(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		// Get
+
+		WCHAR szCurDir[MAX_PATH] = {0};
+
+		GetCurrentDirectory(MAX_PATH, szCurDir);
+
+		rEngine.Print(szCurDir, THU_PRINT_MESSAGE);
+	}
+	else
+	{
+		// Set
+
+		if(rParams[0].GetVarType() != THU_VAR_STRING)
+		{
+			rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		SetCurrentDirectory(rParams[0].GetStringValue());
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_map(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		rEngine.Print(L"invalid syntax: string path expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_STRING)
+	{
+		rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	// Find map in the file system
+
+	LPCWSTR pszPath = rParams[0].GetStringValue();
+
+	WCHAR szSpecialPath[MAX_PATH] = {0};
+
+	if((PathFindFileName(pszPath) == pszPath) && PathFileExists(pszPath) == FALSE)
+	{
+		// If only file name specified, and file does not exist in current directory, search base\maps
+		
+		wcscpy_s(szSpecialPath, MAX_PATH, rEngine.GetBaseDirectory());
+		PathAppend(szSpecialPath, L"maps");
+		PathAppend(szSpecialPath, pszPath);
+		
+		LPWSTR pszExt = PathFindExtension(szSpecialPath);
+		if(NULL == *pszExt || wcscmp(pszExt, L".thm") != 0) wcscpy_s(pszExt, 5, L".thm");
+
+		pszPath = szSpecialPath;
+	}
+
+	try
+	{
+		// Load specified map
+
+		CThunderMap* pMap = rEngine.GetMaps().Load(pszPath);
+
+		// Set it as current map
+
+		rEngine.SetCurrentMap(pMap);
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		PrintLastError(rEngine);
+
+		return FALSE;
+	}	
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_savemap(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	try
+	{
+		if(rParams.size() == 1)
+		{
+			if(rParams[0].GetVarType() != THU_VAR_STRING)
+			{
+				rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+				return FALSE;
+			}
+
+			// Save current map
+
+			LPCWSTR pszPath = rParams[0].GetStringValue();
+
+			WCHAR szSpecialPath[MAX_PATH] = {0};
+
+			if((PathFindFileName(pszPath) == pszPath))
+			{
+				// If only file name specified, and file does not exist in current directory, search base\maps
+
+				wcscpy_s(szSpecialPath, MAX_PATH, rEngine.GetBaseDirectory());
+				PathAppend(szSpecialPath, L"maps");
+				PathAppend(szSpecialPath, pszPath);
+
+				LPWSTR pszExt = PathFindExtension(szSpecialPath);
+				if(NULL == *pszExt || wcscmp(pszExt, L".thm") != 0) wcscpy_s(pszExt, 5, L".thm");
+
+				pszPath = szSpecialPath;
+			}
+
+			rEngine.GetMaps().Save(rEngine.GetCurrentMap(), pszPath);
+		}
+		else
+		{
+			if(rParams.size() != 2)
+			{
+				rEngine.Print(L"invalid syntax: string searchpattern, string path expected.", THU_PRINT_ERROR);
+				return FALSE;
+			}
+
+			if(rParams[0].GetVarType() != THU_VAR_STRING)
+			{
+				rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+				return FALSE;
+			}
+
+			if(rParams[1].GetVarType() != THU_VAR_STRING)
+			{
+				rEngine.Print(L"invalid param type (2): expected string.", THU_PRINT_ERROR);
+				return FALSE;
+			}
+
+			// Save specified map
+
+			LPCWSTR pszPath = rParams[1].GetStringValue();
+
+			WCHAR szSpecialPath[MAX_PATH] = {0};
+
+			if((PathFindFileName(pszPath) == pszPath))
+			{
+				// If only file name specified, and file does not exist in current directory, search base\maps
+
+				wcscpy_s(szSpecialPath, MAX_PATH, rEngine.GetBaseDirectory());
+				PathAppend(szSpecialPath, L"maps");
+				PathAppend(szSpecialPath, pszPath);
+
+				LPWSTR pszExt = PathFindExtension(szSpecialPath);
+				if(NULL == *pszExt || wcscmp(pszExt, L".thm") != 0) wcscpy_s(pszExt, 5, L".thm");
+
+				pszPath = szSpecialPath;
+			}
+
+			CThunderMap* pMap = *rParams[1].GetStringValue() ? rEngine.GetMaps().Find(rParams[1].GetStringValue()) : rEngine.GetMaps().FindPattern(rParams[0].GetStringValue());
+
+			rEngine.GetMaps().Save(pMap, pszPath);
+		}
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		PrintLastError(rEngine);
+
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_loadgame(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		rEngine.Print(L"invalid syntax: string loadfilepath expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_STRING)
+	{
+		rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	LPCWSTR pszPath = rParams[0].GetStringValue();
+
+	WCHAR szSpecialPath[MAX_PATH] = {0};
+
+	if((PathFindFileName(pszPath) == pszPath) && PathFileExists(pszPath) == FALSE)
+	{
+		// If only file name specified, and file does not exist in current directory, search base\save
+
+		wcscpy_s(szSpecialPath, MAX_PATH, rEngine.GetBaseDirectory());
+		PathAppend(szSpecialPath, L"save");
+		PathAppend(szSpecialPath, pszPath);
+
+		LPWSTR pszExt = PathFindExtension(szSpecialPath);
+		if(NULL == *pszExt || wcscmp(pszExt, L".thv") != 0) wcscpy_s(pszExt, 5, L".thv");
+
+		pszPath = szSpecialPath;
+	}
+
+	try
+	{
+		rEngine.DeserializeSession(pszPath);
+	}
+
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		PrintLastError(rEngine);
+
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_savegame(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		rEngine.Print(L"invalid syntax: string savefilepath expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_STRING)
+	{
+		rEngine.Print(L"invalid param type (1): expected string.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	LPCWSTR pszPath = rParams[0].GetStringValue();
+
+	WCHAR szSpecialPath[MAX_PATH] = {0};
+
+	if((PathFindFileName(pszPath) == pszPath) && PathFileExists(pszPath) == FALSE)
+	{
+		// If only file name specified, and file does not exist in current directory, search base\save
+
+		wcscpy_s(szSpecialPath, MAX_PATH, rEngine.GetBaseDirectory());
+		PathAppend(szSpecialPath, L"save");
+		PathAppend(szSpecialPath, pszPath);
+
+		LPWSTR pszExt = PathFindExtension(szSpecialPath);
+
+		if(NULL == *pszExt || wcscmp(pszExt, L".thv") == 0)
+			wcscpy_s(pszExt, 5, L".thv");
+
+		pszPath = szSpecialPath;
+	}
+
+	try
+	{
+		rEngine.SerializeSession(pszPath);
+	}
+	
+	catch(CThunderError& rError)
+	{
+		UNREFERENCED_PARAMETER(rError);
+
+		PrintLastError(rEngine);
+
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+int CHitman2DGame::cmd_quickload(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	vector<CThunderVariable> params;
+
+	params.resize(1);
+	params[0].SetStringValue(L"quick");
+
+	return cmd_loadgame(rEngine, params);
+}
+
+int CHitman2DGame::cmd_quicksave(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	vector<CThunderVariable> params;
+
+	params.resize(1);
+	params[0].SetStringValue(L"quick");
+
+	return cmd_savegame(rEngine, params);
+}
+
+int CHitman2DGame::cmd_control(CThunderEngine& rEngine, vector<CThunderVariable>& rParams)
+{
+	if(rParams.empty() == true)
+	{
+		rEngine.Print(L"invalid syntax: enum controls controlname, [string virtkey] expected.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams[0].GetVarType() != THU_VAR_STRING && rParams[0].GetVarType() != THU_VAR_ENUM)
+	{
+		rEngine.Print(L"invalid param type (1): expected string or enum.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	// Determine control index
+
+	int nControl = rParams[0].GetEnumValue(H2D_SZ_CONTROLS, H2D_CONTROL_COUNT);
+
+	if(nControl == -1)
+	{
+		rEngine.Print(L"invalid control specified, see help for controls.", THU_PRINT_ERROR);
+		return FALSE;
+	}
+
+	if(rParams.size() == 1)
+	{
+		// Display key currently binded to control
+
+		CThunderVariable varKey;
+		varKey.SetEnumValue(dynamic_cast<CHitman2DGame*>(rEngine.GetGameInstance())->GetControl(static_cast<H2D_CONTROLS>(nControl)), H2D_SZ_VKMAP, sizeof(H2D_SZ_VKMAP) / sizeof(LPCWSTR), L"unassigned");
+
+		CThunderString strKey;
+		varKey.ToString(strKey);
+
+		rEngine.Print(strKey, THU_PRINT_INFO);
+	}
+	else if(rParams.size() == 2)
+	{
+		// Bind key to control
+
+		if(rParams[1].GetVarType() != THU_VAR_STRING)
+		{
+			rEngine.Print(L"invalid param type (2): expected string.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		int nKey = rParams[1].GetEnumValue(H2D_SZ_VKMAP, sizeof(H2D_SZ_VKMAP) / sizeof(LPCWSTR));
+
+		if(nKey == -1)
+		{
+			rEngine.Print(L"invalid key specified, see help for possible key names.", THU_PRINT_ERROR);
+			return FALSE;
+		}
+
+		dynamic_cast<CHitman2DGame*>(rEngine.GetGameInstance())->SetControl(static_cast<H2D_CONTROLS>(nControl), nKey);
+	}
+
+	return TRUE;
+}
+
+void CHitman2DGame::PrintFlags(DWORD dwFlags, const LPCWSTR* pszarFlags, const DWORD* dwarFlags, int nFlagsCount, CThunderString& strFlagsOut, LPCWSTR pszSepBefore, LPCWSTR pszSepAfter)
+{
+	strFlagsOut.Empty();
+
+	// Write flags into a string.
+
+	if(0 == dwFlags && 0 == dwarFlags[0])
+	{
+		// If the first item in flags array is 0 and no flags set, use that item
+
+		strFlagsOut = pszarFlags[0];
+
+		return;
+	}
+
+	while(dwFlags)
+	{
+		int n = 0;
+
+		for(; n < nFlagsCount; n++)
+		{
+			if(dwFlags & dwarFlags[n])
+			{
+				dwFlags &= ~dwarFlags[n];
+
+				if(*pszSepBefore) strFlagsOut += pszSepBefore;
+
+				strFlagsOut += pszarFlags[n];
+
+				if(dwFlags && *pszSepAfter) strFlagsOut += pszSepAfter;
+
+				break;
+			}
+		}
+
+		if(n == nFlagsCount)
+		{
+			break;
+		}
+	}
+}
+
+void CHitman2DGame::PrintLastError(CThunderEngine& rEngine)
+{
+	// Print out error stack
+
+	CThunderString str;
+	CThunderString strLine;
+
+	WCHAR szSpaces[128] = {0};
+
+	while(rEngine.GetErrorsConst().GetCount())
+	{
+		// Get error description
+
+		str = rEngine.GetErrorsConst().GetLastError()->GetDescription();
+		rEngine.GetErrors().Pop();
+
+		if(NULL == *szSpaces)
+		{
+			// Print it, if the first stack level
+
+			rEngine.Print(str, THU_PRINT_ERROR);
+		}
+		else
+		{
+			// Break it into lines, then print every line
+			// prefixed by spaces according to stack level
+
+			LPCWSTR pszStart = str.GetBufferConst();
+			LPCWSTR pszEnd = wcschr(pszStart, L'\n');
+
+			for(;;)
+			{
+				if(NULL == pszEnd)
+					pszEnd = pszStart + wcslen(pszStart);
+				else
+					pszEnd--;
+
+				strLine.Allocate(pszEnd - pszStart + 1);
+				strLine.CopyToBuffer(pszEnd - pszStart + 1, pszStart, pszEnd - pszStart);
+
+				rEngine.Print(szSpaces, THU_PRINT_ERROR, false);
+				rEngine.Print(strLine, THU_PRINT_ERROR);
+
+				if(L'\0' == *pszEnd) break;
+
+				pszStart = pszEnd + 2;
+				pszEnd = wcschr(pszStart, L'\n');
+			}
+		}
+
+		// Increase number of spaces after each stack level
+
+		wcscat_s(szSpaces, 128, L"   ");
+	}
+}

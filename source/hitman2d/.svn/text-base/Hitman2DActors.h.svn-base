@@ -1,0 +1,60 @@
+/*------------------------------------------------------------------*\
+|
+| Hitman2DActors.h
+|
+|-------------------------------------------------------------------
+|
+| Content: HiTMAN: 2D actor class(es)
+| Created: 09/06/2007
+|
+|-------------------------------------------------------------------
+| Copyright © Valeriy Novytskyy
+\*------------------------------------------------------------------*/
+
+#ifndef HITMAN2D_ACTORS_H
+#define HITMAN2D_ACTORS_H
+
+/*----------------------------------------------------------*\
+| CHitman2DActorProp class
+\*----------------------------------------------------------*/
+
+class CHitman2DActorProp: public CThunderActor
+{
+public:
+	CHitman2DActorProp(CThunderMap& rMap, LPCWSTR pszClass);
+	virtual ~CHitman2DActorProp(void);
+
+public:
+	static CHitman2DActorProp* CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderMap* pMap);
+};
+
+/*----------------------------------------------------------*\
+| CHitman2DActorPlayer class
+\*----------------------------------------------------------*/
+
+class CHitman2DActorPlayer: public CThunderActor
+{
+private:
+	float m_fLastMoved;
+	CThunderTileVector3 m_vecLastPos;
+
+	CThunderTileVector m_vecWalkingDir;
+	float m_fWalkingSpeed;
+	bool m_bWalking;
+
+public:
+	CHitman2DActorPlayer(CThunderMap& rMap, LPCWSTR pszClass);
+	virtual ~CHitman2DActorPlayer(void);
+
+public:
+	virtual void Update(void);
+
+	//virtual bool Render();
+
+	virtual void OnKeyDown(int nKeyCode);
+	virtual void OnKeyUp(int nKeyCode);
+
+	static CHitman2DActorPlayer* CreateInstance(CThunderEngine& rEngine, LPCWSTR pszClass, CThunderMap* pMap);
+};
+
+#endif // HITMAN2D_ACTORS_H

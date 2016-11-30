@@ -1,0 +1,246 @@
+/*------------------------------------------------------------------*\
+|
+| Hitman2DGlobals.cpp
+|
+|-------------------------------------------------------------------
+|
+| Content: HiTMAN: 2D global functions
+| Created: 08/12/2007
+|
+|-------------------------------------------------------------------
+| Copyright © Valeriy Novytskyy
+\*------------------------------------------------------------------*/
+
+/*----------------------------------------------------------*\
+| Includes
+\*----------------------------------------------------------*/
+
+#include "stdafx.h"				// precompiled header
+#include "Hitman2DGlobals.h"	// defining global function
+
+
+float FormatMemory(DWORD dwSizeInBytes, LPCWSTR* ppszUnits)
+{
+	const LPCWSTR SZ_UNITS[] = { L"bytes", L"KB", L"MB", L"GB" };
+
+	float fSize = float(dwSizeInBytes);
+	int nUnit = 0;
+
+	if(dwSizeInBytes >= 1024)
+	{
+		fSize = float(dwSizeInBytes / 1024);
+		nUnit++;
+	}	
+
+	while(fSize >= 1024.0f && nUnit < 4)
+	{
+		fSize /= 1024.0f;
+		nUnit++;
+	}
+
+	*ppszUnits = (LPCWSTR)SZ_UNITS[nUnit];
+
+	return fSize;
+}
+
+D3DXIMAGE_FILEFORMAT ImageFormatFromExtension(LPCWSTR pszExt)
+{
+	if(!wcscmp(pszExt, L".bmp"))
+	{
+		return D3DXIFF_BMP;
+	}
+	else if(!wcscmp(pszExt, L".jpg"))
+	{
+		return D3DXIFF_JPG;
+	}
+	else if(!wcscmp(pszExt, L".tga"))
+	{
+		return D3DXIFF_TGA;
+	}
+	else if(!wcscmp(pszExt, L".png"))
+	{
+		return D3DXIFF_PNG;
+	}
+	else if(!wcscmp(pszExt, L".dds"))
+	{
+		return D3DXIFF_DDS;
+	}
+
+	return (D3DXIMAGE_FILEFORMAT)-1;
+}
+
+THU_RESOURCE_TYPES DetectResourceType(LPCWSTR pszPath, bool bExamineContents, CThunderErrorStack* pErrors)
+{
+	if(true == bExamineContents)
+	{
+		// Open the file
+
+		CThunderStream stream(pErrors);
+
+		try
+		{
+			stream.Open(pszPath, GENERIC_READ, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN);
+		}
+		
+		catch(CThunderError& rError)
+		{
+			UNREFERENCED_PARAMETER(rError);
+
+			if(pErrors != NULL)
+				throw pErrors->Push(new CThunderErrorFileOpen(__FUNCTIONW__, pszPath));
+			else
+				throw CThunderErrorFileOpen(__FUNCTIONW__, pszPath);
+		}
+
+		try
+		{
+			// Is text format?
+
+			if(stream.IsUnicodeTextFile() == true)
+			{
+				// Create a read buffer
+
+				stream.CreateReadBuffer();
+
+				LPCWSTR pszBuffer = (LPCWSTR)stream.GetReadBufferConst();
+
+				// Skip all white space and comments
+
+				while(EatWhiteSpaceNewline(&pszBuffer) > 0 || EatComment(&pszBuffer) > 0);
+
+				// Read the name of the header element
+
+				LPCWSTR pszNameStart = pszBuffer;
+
+				while(IsValidNameChar(*pszBuffer)) pszBuffer++;
+
+				int nNameLen = pszBuffer - pszNameStart;
+
+				if(0 == nNameLen) return THU_RESOURCE_ANY;
+
+				CThunderString strElemName;
+
+				strElemName.Allocate(nNameLen);
+
+				strElemName.CopyToBuffer(nNameLen, pszNameStart, nNameLen);
+
+				// Detect file type based on element name
+
+				if(strElemName == L"texturesheet")
+				{
+					return THU_RESOURCE_TEXTURESHEET;
+				}
+				else if(strElemName == L"font")
+				{
+					return THU_RESOURCE_TEXTUREFONT;
+				}
+				else if(strElemName == L"animation")
+				{
+					return THU_RESOURCE_ANIMATION;
+				}
+				else if(strElemName == L"sprite")
+				{
+					return THU_RESOURCE_SPRITE;
+				}
+				else if(strElemName == L"stringtable")
+				{
+					return THU_RESOURCE_STRINGTABLE;
+				}
+			}
+			else
+			{
+				// If a binary file, read the signature
+
+				DWORD dwSignature = 0;
+
+				stream.ReadVar(&dwSignature);
+
+				if(dwSignature == *(const DWORD*)"THR")
+				{
+					// RegionSet
+
+					return THU_RESOURCE_REGIONSET;
+				}
+				else if(strncmp((const char*)&dwSignature, "RIFF", 4) == 0)
+				{
+					// WAV file
+
+					return THU_RESOURCE_SOUND;
+				}
+				else if(strncmp((const char*)&dwSignature, "ID3", 3) == 0)
+				{
+					// MP3 file
+
+					return THU_RESOURCE_MUSIC;
+				}
+			}
+		}
+
+		catch(CThunderError& rError)
+		{
+			UNREFERENCED_PARAMETER(rError);
+
+			if(pErrors != NULL)
+			{
+				pErrors->Push(rError.Duplicate());
+				throw pErrors->Push(new CThunderErrorFileDeserialize(__FUNCTIONW__, pszPath));
+			}
+			else
+			{
+				throw CThunderErrorFileDeserialize(__FUNCTIONW__, pszPath);
+			}
+		}
+	}
+	else
+	{
+		// If contents cannot be examined, attempt to determine file type by extension
+
+		CThunderString strExt = PathFindExtension(pszPath);
+
+		if(strExt.GetLength())
+		{
+			if(strExt == L".jpg" ||
+			   strExt == L".bmp" ||
+			   strExt == L".png" ||
+			   strExt == L".tga" ||
+			   strExt == L".dds")
+			{
+				return THU_RESOURCE_TEXTURE;
+			}
+			else if(strExt == L".thx")
+			{
+				return THU_RESOURCE_TEXTURESHEET;
+			}
+			else if(strExt == L".thf")
+			{
+				return THU_RESOURCE_TEXTUREFONT;
+			}
+			else if(strExt == L".tha")
+			{
+				return THU_RESOURCE_ANIMATION;
+			}
+			else if(strExt == L".ths")
+			{
+				return THU_RESOURCE_SPRITE;
+			}
+			else if(strExt == L".thr")
+			{
+				return THU_RESOURCE_REGIONSET;
+			}
+			else if(strExt == L".wav")
+			{
+				return THU_RESOURCE_SOUND;
+			}
+			else if(strExt == L".mp3")
+			{
+				return THU_RESOURCE_MUSIC;
+			}
+			else if(strExt == L".tht")
+			{
+				return THU_RESOURCE_STRINGTABLE;
+			}
+		}
+	}
+
+	return THU_RESOURCE_ANY;
+}
